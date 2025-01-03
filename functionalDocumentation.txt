@@ -1,0 +1,229 @@
+Route Setter Scheduling Application - Functional Documentation
+
+I. Project Goal & Vision
+
+    Primary Goal: To create a user-friendly and efficient web application for scheduling route setters across multiple climbing gym locations. The system should streamline setter assignments, wall selection, and track relevant scheduling metrics, enhancing the overall operational workflow.
+
+    Vision: To establish a centralized scheduling platform that is intuitive for both head setters and regular setters. This platform will optimize route-setting efficiency across all locations, facilitate better data analysis, and ensure a smooth scheduling process.
+
+II. Core Requirements
+
+    Technology Stack:
+
+        Frontend: React.js (or similar) for a dynamic and responsive user interface.
+
+        Backend & Database: Supabase for managing data, authentication, and serverless functions.
+
+        Schedule UI: A custom component, possibly leveraging a grid layout, will be developed to manage the complexities of the schedule display.
+
+        Deployment: Vercel (or similar) for easy deployment and scaling.
+
+        User Authentication: Implement role-based authentication (head setter, setter) to manage permissions.
+
+   Core Functionality (Revised)
+
+    Schedule Creation: Head setters can create and manage schedule entries. Each entry specifies a setting session for a particular gym on a specific date.
+
+    Wall Selection: Each schedule entry includes a selection of walls to be set during the session, with the understanding that all assigned setters are responsible for all selected walls within that entry. This feature is not used for the "Vacation" gym.
+
+    Setter Assignment: Each schedule entry can have multiple setters assigned. These setters collaboratively work on all assigned walls for the entry. The "Vacation" gym will only include setters who are on leave.
+
+    Data Display: Present the schedule clearly, showing the list of gyms, dates, selected walls (except for the "Vacation" gym), assigned setters, and relevant metrics for each entry.
+
+    Time Off Tracking: Implement features to track setter time off/vacation requests.
+
+        Submit Time Off: Form to submit time off requests.
+
+        View Time Off Requests: Display submitted time off requests.
+
+        Main Schedule View: The schedule will include a "Vacation" gym section, to display the setters who are on leave.
+
+    Wall Editor: Implement an admin interface to edit walls.
+    * Allows a user to edit wall names, difficulty, climbs per setter, wall type, and which gyms they're in.
+    * Should be responsive on both desktop and mobile devices.
+
+        Data Transformations: Use performant data transformations to load the data from the database.
+
+    UI and Navigation:
+
+        Login Page: Secure login for user authentication.
+
+        Main Schedule View: A main schedule page displaying a two-week period, with the ability to page through the schedule.
+
+        Gym Selection: UI to filter schedule views by gym.
+
+        Time Off Pages: Dedicated pages for setters to submit and view time-off requests.
+
+        Wall Editor: Admin view to edit walls.
+
+III. Database Tables
+
+    gyms Table:
+
+        id (Text, primary key)
+
+        name (Text)
+
+        location (Text)
+
+        paired_gym_id (Text, can be null, foreign key to other gym ids)
+
+        active (Boolean)
+
+        created_at (Timestamp)
+
+        updated_at (Timestamp)
+
+    walls Table:
+
+        id (Text, primary key)
+
+        name (Text)
+
+        gym_id (Text, foreign key to the gyms table)
+
+        difficulty (Integer)
+
+        climbs_per_setter (Integer)
+
+        wall_type (Text)
+
+        active (Boolean)
+
+        created_at (Timestamp)
+
+        updated_at (Timestamp)
+
+    users Table:
+
+        id (UUID, primary key, auto-generated)
+
+        email (Text, unique)
+
+        name (Text)
+
+        password (Text, optional, should be able to be set to null)
+
+        role (Text)
+
+        primary_gyms (JSONB)
+
+        created_at (Timestamp)
+
+        updated_at (Timestamp)
+
+    schedule_entries Table:
+
+        id (UUID, primary key, auto-generated)
+
+        schedule_date (Date)
+
+        gym_id (Text, foreign key to the gyms table)
+
+        comments (Text, optional)
+
+        created_at (Timestamp)
+
+        updated_at (Timestamp)
+
+    schedule_entry_walls Table:
+
+        id (UUID, primary key, auto-generated)
+
+        schedule_entry_id (UUID, foreign key to the schedule_entries table)
+
+        wall_id (Text, foreign key to the walls table)
+
+        created_at (Timestamp)
+
+        updated_at (Timestamp)
+
+    schedule_setters Table:
+
+        id (UUID, primary key, auto-generated)
+
+        schedule_entry_id (UUID, foreign key to the schedule_entries table)
+
+        user_id (UUID, foreign key to the users table)
+
+        created_at (Timestamp)
+
+        updated_at (Timestamp)
+
+    time_off Table
+
+        id (UUID, primary key, auto-generated)
+
+        user_id (UUID, foreign key to users)
+
+        start_date (Date)
+
+        end_date (Date)
+
+        hours (Integer)
+
+        reason (Text)
+
+        type (Text)
+
+        status (Text)
+
+        approved_by (UUID, foreign key to users)
+
+        created_at (Timestamp)
+
+        updated_at (Timestamp)
+
+IV. Data Model Explanation (Revised)
+
+    Schedule Entries: A schedule_entry represents a single setting session at a particular gym on a specific date. This session is defined by a combination of the schedule_entries, schedule_entry_walls and schedule_setters table.
+
+    Wall Assignments: A schedule_entry is associated with a set of walls through the schedule_entry_walls table. All walls listed in this table should be set during this schedule entry. This is not applicable to the "Vacation" gym.
+
+    Setter Assignments: A schedule_entry is associated with a set of setters through the schedule_setters table. All setters listed in this table are responsible for setting all the walls defined in the entry. The "Vacation" gym will include setters who are on leave and is not related to the wall assignments.
+
+V. Component Features (Custom Implementation) (Revised)
+
+    SetterSelector: A custom component to select setters.
+
+        Loads the list of setters from the users table, filtered by primary gyms.
+
+        For the "Vacation" gym, this will load all setters.
+
+        Displays clear visual cues if a setter is already scheduled on that day at that gym (conflict detection).
+
+        Supports selection of multiple setters.
+
+    WallSelector: A custom component for selecting the walls for the setting session.
+
+        Loads walls from the walls table, filtered by the associated gym.
+
+        This component will not be shown on the "Vacation" gym.
+
+        Allows multiple wall selections.
+
+        Should have a toggle between boulder and rope walls.
+
+VI. Supabase Interaction
+
+    Consolidate database interactions in a DataManager or equivalent module.
+
+    Ensure data fetching, transformation, and updating is handled cleanly and efficiently.
+
+    Optimize Supabase queries for performance.
+
+VII. Core Workflow
+
+    Database Setup: Start with creating and confirming the database schema in Supabase.
+
+    DataManager Implementation: Create a DataManager module and start implementing the functions that you will need for CRUD operations (fetching users, gyms, walls, schedule entries, etc.)
+
+    Gyms Table View: Create a React component and use the DataManager to display it on the page
+
+    Schedule UI Refactor: Refactor the MultiSelect to:
+
+        Fetch data from the DataManager
+
+        Implement the conflict detection logic
+
+        Abstract the props a little bit.

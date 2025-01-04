@@ -35,6 +35,8 @@ const MultiSelect = <T extends any>({
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
+  const isFullyDisabled = typeof disabled === 'boolean' && disabled;
+
   const groupedItems = useMemo(() => {
     if (!groupBy) return { default: items };
     
@@ -97,12 +99,12 @@ const [activeGroup, setActiveGroup] = useState(() => {
   return (
     <div className={cn("relative", className)} ref={wrapperRef}>
       <div
-        className="border border-slate-700 p-2 min-h-[2.5rem] cursor-pointer bg-slate-800 rounded-md text-slate-200"
-        onClick={() => setIsOpen(!isOpen)}
+        className={`border border-slate-700 p-2 min-h-[2.5rem] ${isFullyDisabled ? 'cursor-not-allowed bg-slate-700' : 'cursor-pointer bg-slate-800'} rounded-md text-slate-200`}
+        onClick={() => !isFullyDisabled && setIsOpen(!isOpen)}
       >
         {selectedItems.length ? selectedItems.map(getDisplayValue).join(', ') : placeholder}
       </div>
-      {isOpen && (
+      {!isFullyDisabled && isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-md shadow-lg overflow-hidden">
           {groups.length > 1 && (
             <div className="p-2 border-b bg-slate-700">
@@ -131,6 +133,7 @@ const [activeGroup, setActiveGroup] = useState(() => {
                 const id = getId(item);
                 const displayValue = getDisplayValue(item);
                 const isSelected = selectedIds.includes(id);
+                const isItemDisabled = typeof disabled === 'object' && disabled?.[id];
 
                 return (
                   <Button
@@ -139,11 +142,11 @@ const [activeGroup, setActiveGroup] = useState(() => {
                     size={size}
                     className={cn(
                       "text-left text-sm h-8 bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-700",
-                      disabled?.[id] ? "opacity-50 pointer-events-none" : "",
+                      isItemDisabled ? "opacity-50 pointer-events-none" : "",
                       buttonClassName
                     )}
                     onClick={() => {
-                      if (disabled?.[id]) return;
+                      if (isItemDisabled) return;
                       handleSelectionChange(id, isSelected);
                     }}
                   >

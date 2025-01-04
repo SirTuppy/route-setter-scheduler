@@ -5,6 +5,7 @@ import { SchedulerError, ErrorCodes } from '../errors/types';
 import { User } from './DataManager';
 import { dataManager } from './DataManager';
 import { getStandardizedDateKey, getDateForDatabase } from '../utils/dateUtils';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface Wall {
     id: string;
@@ -35,6 +36,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
 }) => {
     const [localComment, setLocalComment] = useState('');
     const [isCommentModified, setIsCommentModified] = useState(false);
+    const { isHeadSetter, loading } = usePermissions();
     
     const dateKey = getStandardizedDateKey(date);
     const gymKey = `${gym}-${dateKey}`;
@@ -178,58 +180,59 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                 {gym !== 'vacation' && (
                     <>
                         <MultiSelect<Wall>
-                            items={walls}
-                            selectedIds={currentData.walls || []}
-                            onChange={wallIds => updateLocalData('walls', wallIds)}
-                            getDisplayValue={getWallDisplayValue}
-                            getId={getWallId}
-                            groupBy={(wall) => wall.wall_type === 'boulder' ? 'Boulder Walls' : 'Rope Walls'}
-                            placeholder="Select walls"
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                        />
+    items={walls}
+    selectedIds={currentData.walls || []}
+    onChange={wallIds => updateLocalData('walls', wallIds)}
+    getDisplayValue={getWallDisplayValue}
+    getId={getWallId}
+    groupBy={(wall) => wall.wall_type === 'boulder' ? 'Boulder Walls' : 'Rope Walls'}
+    placeholder={isHeadSetter ? "Select walls" : "Walls (view only)"}
+    variant="outline"
+    size="sm"
+    className="w-full"
+    disabled={!isHeadSetter} // Changed to boolean
+/>
                         <div className="grid grid-cols-2 gap-2">
-                        <div
-                                className="p-2 bg-slate-700 rounded text-slate-200"
-                              style={{ backgroundColor: getDifficultyColor(metrics.difficulty) }}
-                            >
-                               Difficulty: {metrics.difficulty}
+                            <div className="p-2 bg-slate-700 rounded text-slate-200"
+                                style={{ backgroundColor: getDifficultyColor(metrics.difficulty) }}>
+                                Difficulty: {metrics.difficulty}
                             </div>
                             <div className="p-2 bg-slate-700 rounded text-slate-200">
-                               Climbs: {metrics.climbs}
+                                Climbs: {metrics.climbs}
                             </div>
                         </div>
                     </>
                 )}
 
-                <MultiSelect<User>
-                    items={setters}
-                    selectedIds={currentData.setters || []}
-                    onChange={setterIds => updateLocalData('setters', setterIds)}
-                    getDisplayValue={getSetterDisplayValue}
-                    getId={getSetterId}
-                    groupBy={setterGrouping}
-                    placeholder="Select setters"
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    disabled={conflictingSetters.reduce((acc, id) => ({
-                        ...acc,
-                        [id]: true
-                    }), {})}
-                />
+<MultiSelect<User>
+    items={setters}
+    selectedIds={currentData.setters || []}
+    onChange={setterIds => updateLocalData('setters', setterIds)}
+    getDisplayValue={getSetterDisplayValue}
+    getId={getSetterId}
+    groupBy={setterGrouping}
+    placeholder={isHeadSetter ? "Select setters" : "Setters (view only)"}
+    variant="outline"
+    size="sm"
+    className="w-full"
+    disabled={!isHeadSetter || conflictingSetters.reduce((acc, id) => ({
+        ...acc,
+        [id]: true
+    }), {})}
+/>
 
-                <Input
-                    className="bg-slate-800 text-slate-200 border-slate-700"
-                    value={localComment}
-                    onChange={e => {
-                        setLocalComment(e.target.value);
-                        setIsCommentModified(true);
-                    }}
-                    onBlur={handleCommentBlur}
-                    placeholder="Add comments..."
-                />
+<Input
+    className="bg-slate-800 text-slate-200 border-slate-700"
+    value={localComment}
+    onChange={e => {
+        if (!isHeadSetter) return;
+        setLocalComment(e.target.value);
+        setIsCommentModified(true);
+    }}
+    onBlur={handleCommentBlur}
+    placeholder={isHeadSetter ? "Add comments..." : "Comments (view only)"}
+    readOnly={!isHeadSetter}
+/>             
             </div>
         </div>
     );

@@ -46,17 +46,21 @@ export interface ScheduleEntry {
 }
 
 export interface TimeOffRequest {
-    id: string;
-    user_id: string;
-    start_date: string;
-    end_date: string;
-    hours: number;
-    reason: string;
-    type: 'vacation' | 'sick' | 'other';
-    status: 'pending' | 'approved' | 'denied';
-    approved_by: string | null;
-    created_at: string;
-    updated_at: string;
+  id: string;
+  user_id: string;
+  start_date: string;
+  end_date: string;
+  hours: number;
+  reason: string;
+  type: 'vacation' | 'sick' | 'other';
+  status: 'pending' | 'approved' | 'denied';
+  approved_by: string | null;
+  created_at: string;
+  updated_at: string;
+  users?: {
+      name: string;
+      email: string;
+  };
 }
 
 class DataManager {
@@ -379,41 +383,145 @@ class DataManager {
 
   // Time Off Operations
   async createTimeOffRequest(
-    timeOff: Omit<TimeOffRequest, 'id' | 'created_at' | 'updated_at' | 'status'>
+    timeOff: Omit<TimeOffRequest, 'id' | 'created_at' | 'updated_at' | 'status' | 'approved_by'>
   ): Promise<TimeOffRequest> {
     try {
-      // TODO: Implement Supabase query
-      throw new Error('Not implemented');
+      const { data, error } = await this.supabase
+        .from('time_off')
+        .insert({
+          ...timeOff,
+          status: 'pending',
+          approved_by: null
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating time off request:', error);
+        throw error;
+      }
+
+      return data;
     } catch (error) {
+      console.error('Error in createTimeOffRequest:', error);
       throw new SchedulerError('Failed to create time off request', ErrorCodes.DATA_UPDATE_ERROR);
     }
   }
 
-  async updateTimeOffRequest(timeOff: TimeOffRequest): Promise<TimeOffRequest> {
+  async fetchTimeOffRequests(userId?: string, status?: string): Promise<TimeOffRequest[]> {
     try {
-      // TODO: Implement Supabase query
-      throw new Error('Not implemented');
-    } catch (error) {
-      throw new SchedulerError('Failed to update time off request', ErrorCodes.DATA_UPDATE_ERROR);
-    }
-  }
+        let query = this.supabase
+            .from('time_off')
+            .select(`
+                *,
+                users!time_off_user_id_fkey (
+                    name,
+                    email
+                )
+            `)
+            .order('start_date', { ascending: false });
 
-    async fetchTimeOffRequests(userId?: string): Promise<TimeOffRequest[]> {
-        try {
-            // TODO: Implement Supabase query
-            throw new Error('Not implemented');
-        } catch (error) {
-            throw new SchedulerError('Failed to fetch time off requests', ErrorCodes.DATA_FETCH_ERROR);
+        if (userId) {
+            query = query.eq('user_id', userId);
         }
-    }
-    async fetchTimeOffRequestById(id: string): Promise<TimeOffRequest> {
-        try {
-            // TODO: Implement Supabase query
-            throw new Error('Not implemented');
-        } catch (error) {
-            throw new SchedulerError('Failed to fetch time off request', ErrorCodes.DATA_FETCH_ERROR);
+        
+        if (status) {
+            query = query.eq('status', status);
         }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error fetching time off requests:', error);
+            throw error;
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Error in fetchTimeOffRequests:', error);
+        throw new SchedulerError('Failed to fetch time off requests', ErrorCodes.DATA_FETCH_ERROR);
     }
+}
+
+async updateTimeOffRequest(
+    id: string,
+    status: 'approved' | 'denied',
+    approvedBy: string,
+    reason?: string
+): Promise<TimeOffRequest> {
+    try {
+        const updateData: any = {
+            status,
+            approved_by: approvedBy,
+            updated_at: new Date().toISOString()
+        };
+
+        if (reason) {
+            updateData.reason = reason;
+        }
+
+        const { data, error } = await this.supabase
+            .from('time_off')
+            .update(updateData)
+            .eq('id', id)
+            .select(`
+                *,
+                users!time_off_user_id_fkey (
+                    name,
+                    email
+                )
+            `)
+            .single();
+
+        if (error) {
+            console.error('Error updating time off request:', error);
+            throw error;
+        }
+
+        // If approved, create vacation schedule entry
+        if (status === 'approved') {
+            try {
+                await this.createVacationScheduleEntry(data);
+            } catch (error) {
+                console.error('Error creating vacation schedule entry:', error);
+                // Don't throw here - the approval succeeded even if scheduling fails
+            }
+        }
+
+        return data;
+    } catch (error) {
+        console.error('Error in updateTimeOffRequest:', error);
+        throw new SchedulerError('Failed to update time off request', ErrorCodes.DATA_UPDATE_ERROR);
+    }
+}
+
+private async createVacationScheduleEntry(timeOff: TimeOffRequest): Promise<void> {
+    // Helper function to create date range
+    const getDatesInRange = (startDate: Date, endDate: Date) => {
+        const dates = [];
+        const currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+            if (currentDate.getDay() !== 0 && currentDate.getDay() !== 6) { // Skip weekends
+                dates.push(new Date(currentDate));
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+        return dates;
+    };
+
+    const dates = getDatesInRange(new Date(timeOff.start_date), new Date(timeOff.end_date));
+    
+    // Create schedule entries for each date
+    for (const date of dates) {
+        await this.createScheduleEntry({
+            schedule_date: date.toISOString().split('T')[0],
+            gym_id: 'vacation',
+            comments: `Time off: ${timeOff.reason}`,
+            walls: [], // Vacation gym doesn't need walls
+            setters: [timeOff.user_id]
+        });
+    }
+}
 }
 
 export const dataManager = new DataManager();

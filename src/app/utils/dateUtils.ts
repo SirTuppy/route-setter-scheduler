@@ -45,11 +45,6 @@ export const createStandardizedDate = (date?: Date): Date => {
  */
 export const getMondayOfWeek = (date?: Date): Date => {
     const startingDate = date || new Date();
-    console.log('getMondayOfWeek input:', {
-        date: startingDate,
-        dayOfWeek: startingDate.getDay(),
-        fullISO: startingDate.toISOString()
-    });
     
     const monday = new Date(startingDate);
     while (monday.getDay() !== 1) {
@@ -57,12 +52,6 @@ export const getMondayOfWeek = (date?: Date): Date => {
     }
     
     const standardizedMonday = createStandardizedDate(monday);
-    console.log('getMondayOfWeek output:', {
-        monday: monday,
-        dayOfWeek: monday.getDay(),
-        standardized: standardizedMonday,
-        fullISO: standardizedMonday.toISOString()
-    });
     
     return standardizedMonday;
 };

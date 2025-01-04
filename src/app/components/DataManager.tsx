@@ -63,6 +63,11 @@ export interface TimeOffRequest {
   };
 }
 
+interface ScheduleConflict {
+  date: string;
+  gym: string;
+}
+
 class DataManager {
     private supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -86,7 +91,6 @@ class DataManager {
            console.error("Supabase Fetch Error", error)
             throw new SchedulerError('Failed to fetch gyms from Supabase', ErrorCodes.DATA_FETCH_ERROR);
         }
-       //console.log('supabase data', data)
        return data as Gym[];
     } catch (error: any) {
          console.error("Supabase Fetch Error", error)
@@ -112,7 +116,6 @@ class DataManager {
           console.error('Supabase Error fetching walls:', error);
           throw new SchedulerError('Failed to fetch walls', ErrorCodes.DATA_FETCH_ERROR);
       }
-       console.log('wall data from supabase:', data)
         return data as Wall[];
     } catch (error: any) {
       console.error("Error in fetchWalls", error)
@@ -138,14 +141,32 @@ class DataManager {
               console.error('Supabase Error fetching users:', error);
             throw new SchedulerError('Failed to fetch users', ErrorCodes.DATA_FETCH_ERROR);
         }
-        
-          console.log('user data from supabase:', data)
         return data as User[];
 
     } catch (error: any) {
         console.error("Error in fetchUsers", error)
         throw new SchedulerError('Failed to fetch users', ErrorCodes.DATA_FETCH_ERROR);
     }
+}
+
+async fetchUserDetails(userId: string): Promise<User | null> {
+  try {
+      const { data, error } = await this.supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+
+      if (error) {
+          console.error('Error fetching user details:', error);
+          throw error;
+      }
+
+      return data;
+  } catch (error) {
+      console.error('Error in fetchUserDetails:', error);
+      throw new SchedulerError('Failed to fetch user details', ErrorCodes.DATA_FETCH_ERROR);
+  }
 }
 
   // Schedule Operations
@@ -160,8 +181,6 @@ class DataManager {
         `)
         .gte('schedule_date', startDate)
         .lte('schedule_date', endDate);
-
-            console.log('Schedule entries fetched: ', entries);
         
       if (entriesError) {
         console.error('Error fetching schedule entries:', entriesError);
@@ -188,7 +207,6 @@ class DataManager {
     entry: Omit<ScheduleEntry, 'id' | 'created_at' | 'updated_at'>
   ): Promise<ScheduleEntry> {
     try {
-      console.log('Creating schedule entry:', entry);
       
       const { data: scheduleEntry, error: scheduleError } = await this.supabase
         .from('schedule_entries')
@@ -213,8 +231,6 @@ class DataManager {
           schedule_entry_id: scheduleEntry.id,
           wall_id: wallId
         }));
-        
-        console.log('Creating wall assignments:', wallAssignments);
         
         const { error: wallsError } = await this.supabase
           .from('schedule_entry_walls')
@@ -258,7 +274,6 @@ class DataManager {
 
   async updateScheduleEntry(entry: ScheduleEntry): Promise<ScheduleEntry> {
     try {
-      console.log('Updating schedule entry:', entry);
       
       const { data: scheduleEntry, error: scheduleError } = await this.supabase
         .from('schedule_entries')
@@ -444,56 +459,81 @@ class DataManager {
 }
 
 async updateTimeOffRequest(
-    id: string,
-    status: 'approved' | 'denied',
-    approvedBy: string,
-    reason?: string
-): Promise<TimeOffRequest> {
-    try {
-        const updateData: any = {
-            status,
-            approved_by: approvedBy,
-            updated_at: new Date().toISOString()
-        };
-
-        if (reason) {
-            updateData.reason = reason;
-        }
-
-        const { data, error } = await this.supabase
-            .from('time_off')
-            .update(updateData)
-            .eq('id', id)
-            .select(`
-                *,
-                users!time_off_user_id_fkey (
-                    name,
-                    email
-                )
-            `)
-            .single();
-
-        if (error) {
-            console.error('Error updating time off request:', error);
-            throw error;
-        }
-
-        // If approved, create vacation schedule entry
-        if (status === 'approved') {
-            try {
-                await this.createVacationScheduleEntry(data);
-            } catch (error) {
-                console.error('Error creating vacation schedule entry:', error);
-                // Don't throw here - the approval succeeded even if scheduling fails
-            }
-        }
-
-        return data;
-    } catch (error) {
-        console.error('Error in updateTimeOffRequest:', error);
-        throw new SchedulerError('Failed to update time off request', ErrorCodes.DATA_UPDATE_ERROR);
+  id: string,
+  status: 'approved' | 'denied',
+  approvedBy: string,
+  reason?: string
+ ): Promise<TimeOffRequest> {
+  try {
+    const updateData: any = {
+      status,
+      approved_by: approvedBy,
+      updated_at: new Date().toISOString()
+    };
+ 
+    if (reason) {
+      updateData.reason = reason;
     }
-}
+ 
+    if (status === 'approved') {
+      // Get full request details
+      const { data: request, error: requestError } = await this.supabase
+        .from('time_off')
+        .select('*')
+        .eq('id', id)
+        .single();
+ 
+      if (requestError) throw requestError;
+ 
+      // Remove setter from any conflicting schedule entries
+      const entries = await this.fetchScheduleEntries(
+        request.start_date, 
+        request.end_date
+      );
+ 
+      for (const entry of entries) {
+        if (entry.setters.includes(request.user_id) && entry.gym_id !== 'vacation') {
+          await this.updateScheduleEntry({
+            ...entry,
+            setters: entry.setters.filter(setterId => setterId !== request.user_id)
+          });
+        }
+      }
+    }
+ 
+    const { data, error } = await this.supabase
+      .from('time_off')
+      .update(updateData)
+      .eq('id', id)
+      .select(`
+        *,
+        users!time_off_user_id_fkey (
+          name,
+          email
+        )
+      `)
+      .single();
+ 
+    if (error) {
+      console.error('Error updating time off request:', error);
+      throw error;
+    }
+ 
+    // If approved, create vacation schedule entry
+    if (status === 'approved') {
+      try {
+        await this.createVacationScheduleEntry(data);
+      } catch (error) {
+        console.error('Error creating vacation schedule entry:', error);
+      }
+    }
+ 
+    return data;
+  } catch (error) {
+    console.error('Error in updateTimeOffRequest:', error);
+    throw new SchedulerError('Failed to update time off request', ErrorCodes.DATA_UPDATE_ERROR);
+  }
+ }
 
 private async createVacationScheduleEntry(timeOff: TimeOffRequest): Promise<void> {
     // Helper function to create date range
@@ -522,6 +562,47 @@ private async createVacationScheduleEntry(timeOff: TimeOffRequest): Promise<void
         });
     }
 }
+
+async checkTimeOffConflicts(userId: string, startDate: string, endDate: string): Promise<ScheduleConflict[]> {
+  const entries = await this.fetchScheduleEntries(startDate, endDate);
+  return entries
+    .filter(entry => 
+      entry.setters.includes(userId) && 
+      entry.gym_id !== 'vacation'
+    )
+    .map(entry => ({
+      date: entry.schedule_date,
+      gym: entry.gym_id
+    }));
+}
+
+async updateWall(wall: Wall) {
+  try {
+    const { data, error } = await this.supabase
+      .from('walls')
+      .update({
+        difficulty: wall.difficulty,
+        climbs_per_setter: wall.climbs_per_setter,
+        wall_type: wall.wall_type,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', wall.id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('DataManager: Error updating wall:', error);
+      throw error;
+    }
+
+    console.log('DataManager: Wall updated successfully:', data);
+    return { data, error: null };
+  } catch (error) {
+    console.error('DataManager: Update wall error:', error);
+    return { data: null, error };
+  }
+}
+
 }
 
 export const dataManager = new DataManager();

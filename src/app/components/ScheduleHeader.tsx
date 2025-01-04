@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { NavigationButton } from './NavigationButton';
 import { ViewTimeOffButton } from './ViewTimeOffButton';
+import { WallEditorButton } from './WallEditorButton';
 
 interface ScheduleHeaderProps {
   currentDate: Date;
@@ -66,6 +67,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
         </Popover>
         <NavigationButton />
         <ViewTimeOffButton />
+        <WallEditorButton />
       </div>
       <Button
         variant="outline"

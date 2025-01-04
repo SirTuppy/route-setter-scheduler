@@ -7,32 +7,52 @@ import GymFilter from './GymFilter';
 import ScheduleCell from './ScheduleCell';
 import { ErrorBoundary } from './ErrorBoundary';
 import { dataManager, Gym, Wall, User } from './DataManager';
+import { useAuth } from '@/providers/auth-provider';
 import { getStandardizedDateKey, getDateForDatabase, createStandardizedDate, getMondayOfWeek } from '../utils/dateUtils';
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 const ScheduleContent: React.FC = () => {
     const [currentDate, setCurrentDate] = useState(() => getMondayOfWeek());
-    const [hiddenGyms, setHiddenGyms] = useState(new Set<string>());
     const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [scheduleData, setScheduleData] = useState<Record<string, any>>({});
     const [gymGroups, setGymGroups] = useState<Record<string, any>>({});
     const [setters, setSetters] = useState<User[]>([]);
 
+    const { user } = useAuth();
+    const [userDetails, setUserDetails] = useState<User | null>(null);
+    const [hiddenGyms, setHiddenGyms] = useState<Set<string>>(new Set());
+
     useEffect(() => {
-      // Log the initial setup
-      console.log('Date debugging:', {
-          originalDate: new Date(),
-          currentDateState: currentDate,
-          dayOfWeek: currentDate.getDay(),
-          mondayCheck: getMondayOfWeek(new Date()),
-          firstGeneratedDate: Array.from({ length: 1 }, (_, i) => {
-              const date = new Date(currentDate);
-              date.setDate(date.getDate() + i);
-              return date;
-          })[0]
-      });
-  }, []);
+        const loadUserDetails = async () => {
+            if (!user?.id) return;
+            try {
+                const details = await dataManager.fetchUserDetails(user.id);
+                setUserDetails(details);
+                
+                // Get all gym IDs from gymGroups
+                const allGymIds = Object.values(gymGroups).flatMap(group => 
+                    Object.keys(group.gyms)
+                );
+                
+                // Hide gyms not in user's primary_gyms (except vacation)
+                const initialHiddenGyms = new Set(
+                    allGymIds.filter(gymId => 
+                        gymId !== 'vacation' && 
+                        !details?.primary_gyms.includes(gymId)
+                    )
+                );
+                
+                setHiddenGyms(initialHiddenGyms);
+            } catch (error) {
+                console.error('Error loading user details:', error);
+            }
+        };
+        
+        if (Object.keys(gymGroups).length > 0) {
+            loadUserDetails();
+        }
+    }, [user?.id, gymGroups]);
 
     useEffect(() => {
         const loadSetters = async () => {
@@ -72,10 +92,10 @@ const ScheduleContent: React.FC = () => {
                         gyms: {} as Record<string, any>
                     },
                     vacationGym: {
-                        color: 'bg-pink-900/20',
-                        border: 'border-l-4 border-pink-600',
+                        color: 'bg-slate-800/40',
+                        border: 'border-l-4 border-slate-400',
                         gyms: {} as Record<string, any>
-                    }
+                      }
                 };
                
                 const fetchWallsForGym = async (gym: Gym) => {
@@ -187,7 +207,6 @@ const ScheduleContent: React.FC = () => {
         });
     };
 
-    console.log('Current Schedule data::', scheduleData);
     return (
       <Card className="w-full bg-slate-900 border-slate-800">
           <CardContent className="p-6">

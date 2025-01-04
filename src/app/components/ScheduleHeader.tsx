@@ -5,6 +5,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { NavigationButton } from './NavigationButton';
 import { ViewTimeOffButton } from './ViewTimeOffButton';
 import { WallEditorButton } from './WallEditorButton';
+import { YellowPageButton } from './YellowPageButton';
 
 interface ScheduleHeaderProps {
   currentDate: Date;
@@ -68,6 +69,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
         <NavigationButton />
         <ViewTimeOffButton />
         <WallEditorButton />
+        <YellowPageButton />
       </div>
       <Button
         variant="outline"

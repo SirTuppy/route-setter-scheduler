@@ -10,10 +10,10 @@ export const YellowPageButton = () => {
   return (
     <Button
       variant="outline"
-      className="border-slate-700 hover:bg-slate-800 text-slate-200 bg-slate-700"
+      className="border-slate-700 hover:bg-amber-600 text-slate-200 bg-amber-600"
       onClick={() => router.push('/yellow-page')}
     >
-      Yellow Page
+      Yellow Page Exporter
     </Button>
   );
 };

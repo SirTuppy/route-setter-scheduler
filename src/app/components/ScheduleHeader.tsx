@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { NavigationButton } from './NavigationButton';
+import { SubmitTimeOffButton } from './SubmitTimeOffButton';
 import { ViewTimeOffButton } from './ViewTimeOffButton';
 import { WallEditorButton } from './WallEditorButton';
 import { YellowPageButton } from './YellowPageButton';
@@ -52,21 +52,21 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
               Select date
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="p-0 w-auto bg-slate-800 border-slate-700">
+          <PopoverContent className="p-0 w-auto bg-stone-800 border-stone-700">
             <Calendar
               mode="single"
               selected={currentDate}
               onSelect={handleDateSelect}
               classNames={{
-                day: "text-slate-200",
-                month: "text-slate-200",
-                year: "text-slate-200",
+                day: "text-slate-300",
+                month: "text-slate-300",
+                year: "text-slate-300",
                 day_selected: "bg-blue-500 text-white"
               }}
             />
           </PopoverContent>
         </Popover>
-        <NavigationButton />
+        <SubmitTimeOffButton />
         <ViewTimeOffButton />
         <WallEditorButton />
         <YellowPageButton />

@@ -10,7 +10,7 @@ export const ViewTimeOffButton = () => {
   return (
     <Button
       variant="outline"
-      className="border-slate-700 hover:bg-slate-800 text-slate-200 bg-slate-700"
+      className="border-slate-700 hover:bg-cyan-700 text-slate-200 bg-cyan-600"
       onClick={() => router.push('/time-off/view')}
     >
       View Time Off

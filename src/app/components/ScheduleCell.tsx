@@ -163,15 +163,23 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
 
     const getDifficultyColor = (difficulty: number) => {
         // Normalize difficulty to 0-1 range (1-5 -> 0-1)
-        const normalized = (difficulty - 1) / 4;
-
-        // Calculate RGB values
-        const red = Math.round(normalized * 150); // Reduced red range
-        const green = Math.round((1 - normalized) * 150); // Reduced green range
-        const blue = 180; // Added blue component
-
-        // Add opacity
-        return `rgba(${red}, ${green}, ${blue})`;
+        const normalized = (difficulty - 1) / 4.2;
+    
+        // Create a color transition from green to yellow to red
+        let red = 0;
+        let green = 0;
+    
+        if (normalized < 0.5) {
+            // From green to yellow
+            green = 255;
+            red = Math.round(normalized * 2 * 255);
+        } else {
+            // From yellow to red
+            green = Math.round((1 - (normalized - 0.5) * 2) * 255);
+            red = 255;
+        }
+    
+        return `rgba(${red-25}, ${green+25}, 0, 0.55)`;
     };
 
     return (

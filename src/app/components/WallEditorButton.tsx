@@ -11,7 +11,7 @@ export const WallEditorButton = () => {
   return (
     <Button
       variant="outline"
-      className="border-slate-700 hover:bg-slate-800 text-slate-200 bg-slate-700"
+      className="border-slate-700 hover:bg-teal-800 text-slate-200 bg-teal-700"
       onClick={() => router.push('/wall-editor')}
     >
       Wall Editor

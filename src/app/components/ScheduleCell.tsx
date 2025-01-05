@@ -179,7 +179,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
             red = 255;
         }
     
-        return `rgba(${red-25}, ${green+25}, 0, 0.55)`;
+        return `rgba(${red-25}, ${green+25}, 0, 0.6)`;
     };
 
     return (

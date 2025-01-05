@@ -4,12 +4,12 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
 interface AuthContextType {
     user: User | null;
     session: Session | null;
     loading: boolean;
+    isHeadSetter: boolean;  // Add this
     signIn: (email: string, password: string) => Promise<void>;
     signOut: () => Promise<void>;
 }
@@ -26,42 +26,115 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isHeadSetter, setIsHeadSetter] = useState(false);
     const router = useRouter();
+    
+// Add this function
+const checkRole = async (userId: string) => {
+    try {
+        const { data, error } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', userId)
+            .single();
+
+        if (error) throw error;
+        setIsHeadSetter(data?.role === 'head_setter');
+    } catch (error) {
+        console.error('Error checking role:', error);
+        setIsHeadSetter(false);
+    }
+};
+
+// Then modify your handleSession function to use this:
+const handleSession = async (newSession: Session | null) => {
+    if (!newSession) {
+        setSession(null);
+        setUser(null);
+        setIsHeadSetter(false);
+        return;
+    }
+
+    try {
+        // First try to update any existing session
+        const { error: updateError } = await supabase
+            .from('active_sessions')
+            .upsert({
+                user_id: newSession.user.id,
+                last_seen: new Date().toISOString()
+            }, {
+                onConflict: 'user_id',
+                ignoreDuplicates: false
+            });
+
+        if (updateError) {
+            console.error('Error updating session:', updateError);
+            // If error isn't just a duplicate, try to clear and create new
+            await supabase
+                .from('active_sessions')
+                .delete()
+                .eq('user_id', newSession.user.id);
+
+            const { error: insertError } = await supabase
+                .from('active_sessions')
+                .insert({
+                    user_id: newSession.user.id,
+                    last_seen: new Date().toISOString()
+                });
+
+            if (insertError) {
+                console.error('Error creating new session:', insertError);
+                return;
+            }
+        }
+
+        setSession(newSession);
+        setUser(newSession.user);
+        await checkRole(newSession.user.id);  // Add this
+    } catch (error) {
+        console.error('Session handling error:', error);
+    }
+};
 
     useEffect(() => {
-        const initializeAuth = async () => {
-            try {
-                // Get initial session
-                const { data: { session } } = await supabase.auth.getSession();
-                console.log('Initial session check:', { session });
-                
-                setSession(session);
-                setUser(session?.user ?? null);
-                setLoading(false);
-            } catch (error) {
-                console.error('Error checking session:', error);
-                setLoading(false);
-            }
-        };
-
-        initializeAuth();
-
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            console.log('Auth state changed:', { event: _event, session });
-            setSession(session);
-            setUser(session?.user ?? null);
-            
-            // Handle navigation based on session state
-            if (!session && !window.location.pathname.startsWith('/auth/')) {
+        // Initial session check
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (!session) {
                 router.push('/auth/login');
-            } else if (session && window.location.pathname.startsWith('/auth/')) {
-                router.push('/');
             }
+            handleSession(session);
+            setLoading(false);
         });
 
-        return () => subscription.unsubscribe();
-    }, [router]);
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (_event, session) => {
+                if (_event === 'SIGNED_OUT') {
+                    setSession(null);
+                    setUser(null);
+                    router.replace('/auth/login');
+                } else if (_event === 'SIGNED_IN' || _event === 'TOKEN_REFRESHED') {
+                    await handleSession(session);
+                    router.replace('/');
+                }
+            }
+        );
+
+        // Ping to keep session alive
+        const pingInterval = setInterval(async () => {
+            if (user?.id) {
+                await supabase
+                    .from('active_sessions')
+                    .update({ last_seen: new Date().toISOString() })
+                    .eq('user_id', user.id);
+            }
+        }, 30000);
+
+        return () => {
+            subscription.unsubscribe();
+            clearInterval(pingInterval);
+        };
+    }, [router, user?.id]);
 
     const signIn = async (email: string, password: string) => {
         try {
@@ -73,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (error) throw error;
 
             if (data?.session) {
+                await handleSession(data.session);
                 router.push('/');
             }
         } catch (error) {
@@ -81,16 +155,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const signOut = async () => {
+const signOut = async () => {
+    try {
+        if (user?.id) {
+            await supabase
+                .from('active_sessions')
+                .delete()
+                .eq('user_id', user.id);
+        }
         await supabase.auth.signOut();
-        router.push('/auth/login');
-    };
+    } catch (error) {
+        console.error('Error during sign out:', error);
+    }
+};
 
     return (
         <AuthContext.Provider value={{
             user,
             session,
             loading,
+            isHeadSetter,
             signIn,
             signOut,
         }}>

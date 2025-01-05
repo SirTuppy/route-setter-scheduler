@@ -6,6 +6,7 @@ import { SubmitTimeOffButton } from './SubmitTimeOffButton';
 import { ViewTimeOffButton } from './ViewTimeOffButton';
 import { WallEditorButton } from './WallEditorButton';
 import { YellowPageButton } from './YellowPageButton';
+import UserMenu from './UserMenu';
 
 interface ScheduleHeaderProps {
   currentDate: Date;
@@ -66,6 +67,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
             />
           </PopoverContent>
         </Popover>
+        <UserMenu/>
         <SubmitTimeOffButton />
         <ViewTimeOffButton />
         <WallEditorButton />

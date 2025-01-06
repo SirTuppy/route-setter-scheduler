@@ -1,0 +1,67 @@
+[33mcommit 0971f5ba4d01255efb2a136362859b5822140aac[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mbackup-liveCell-UserMenu-revertFups[m[33m, [m[1;31morigin/main[m[33m, [m[1;32mmain[m[33m)[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Sat Jan 4 23:41:24 2025 -0600
+
+    added LiveCell, UserMenu, updated ScheduleCell,
+    and updates user perms
+
+[33mcommit 5768329f4a51c0f616dc33aa575c58b9e65339ab[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Sat Jan 4 14:17:11 2025 -0600
+
+    ui tweaks w colors
+
+[33mcommit 92791aed9cc749d575eee7390d55587e16e456e8[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Sat Jan 4 13:27:48 2025 -0600
+
+    Yellow Page Exporter added
+
+[33mcommit 95cad0e9750f0957ec6af5b4215a031bf374095c[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Sat Jan 4 11:51:16 2025 -0600
+
+    feat: add WallEditorButton component and integrate it into ScheduleHeader
+    refactor: remove console logs from dateUtils and ScheduleComponent
+
+[33mcommit 75bb8617dd3dc094f214c9f4161afdf5acf9bac0[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Fri Jan 3 22:15:37 2025 -0600
+
+    added time off stuff and userAuth!
+
+[33mcommit b5579a9a311361ca18bcfe969dbaae610b789d3f[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Fri Jan 3 10:35:40 2025 -0600
+
+    chore: ignore typescript and eslint errors during build
+
+[33mcommit 607f159ca08da589e9b1922b5bbbae6e3e414ca4[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Fri Jan 3 10:28:08 2025 -0600
+
+    chore: temporarily relax eslint rules for deployment
+
+[33mcommit d6b26184af2c4e47eaa1b43e898bf1ab9802425e[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Fri Jan 3 10:20:40 2025 -0600
+
+    add resolutions for React 19 dependencies and added npmrc for legacy peer deps
+
+[33mcommit 153e3670a2bcf599655f9e92d9f7bc2756d8556e[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Fri Jan 3 10:18:38 2025 -0600
+
+    add resolutions for React 19 dependencies
+
+[33mcommit 0b96ad56cb2d320e006829e552d8b8dac7f8966c[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Fri Jan 3 10:10:04 2025 -0600
+
+    Initial commit for Vercel deployment
+
+[33mcommit 3902fec6b7932a8d3d2d46448b31fc3ca857888a[m
+Author: Luke Sherlock <lukesherlock99@hotmail.com>
+Date:   Tue Dec 31 19:13:49 2024 -0600
+
+    Initial commit from Create Next App

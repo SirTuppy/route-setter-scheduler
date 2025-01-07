@@ -4,7 +4,6 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 
 interface AuthContextType {
     user: User | null;
@@ -31,28 +30,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const initializeAuth = async () => {
             try {
-                // Get initial session
                 const { data: { session } } = await supabase.auth.getSession();
-                console.log('Initial session check:', { session });
-                
+                console.log('Initial session:', session);
                 setSession(session);
                 setUser(session?.user ?? null);
-                setLoading(false);
             } catch (error) {
                 console.error('Error checking session:', error);
+            } finally {
                 setLoading(false);
             }
         };
 
         initializeAuth();
 
-        // Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-            console.log('Auth state changed:', { event: _event, session });
+            console.log('Auth state changed:', _event, session);
             setSession(session);
             setUser(session?.user ?? null);
             
-            // Handle navigation based on session state
             if (!session && !window.location.pathname.startsWith('/auth/')) {
                 router.push('/auth/login');
             } else if (session && window.location.pathname.startsWith('/auth/')) {
@@ -65,14 +60,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const signIn = async (email: string, password: string) => {
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
+            console.log('Attempting to sign in with email:', email);
+            
+            // First try direct auth without querying users table
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
                 email,
-                password,
+                password
             });
 
-            if (error) throw error;
+            if (authError) {
+                console.error('Auth error:', authError);
+                throw authError;
+            }
 
-            if (data?.session) {
+            if (authData?.session) {
+                console.log('Auth successful, fetching user role');
+                
+                // Now get the user's role
+                const { data: userData, error: userError } = await supabase
+                    .from('users')
+                    .select('role')
+                    .eq('email', email.toLowerCase())
+                    .single();
+
+                if (userError) {
+                    console.error('Error fetching user role:', userError);
+                    throw userError;
+                }
+
+                // Update user metadata with role
+                const { error: updateError } = await supabase.auth.updateUser({
+                    data: { role: userData.role }
+                });
+
+                if (updateError) {
+                    console.error('Error updating user metadata:', updateError);
+                    throw updateError;
+                }
+
+                setSession(authData.session);
+                setUser(authData.user);
                 router.push('/');
             }
         } catch (error) {
@@ -82,8 +109,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const signOut = async () => {
-        await supabase.auth.signOut();
-        router.push('/auth/login');
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            
+            setUser(null);
+            setSession(null);
+            router.push('/auth/login');
+        } catch (error) {
+            console.error('Sign out error:', error);
+            throw error;
+        }
     };
 
     return (

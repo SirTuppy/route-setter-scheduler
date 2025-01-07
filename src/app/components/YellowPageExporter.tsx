@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { dataManager } from './DataManager';
 import { PDFDocument } from 'pdf-lib';
 import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
 import { 
     DESIGN_GYM_CONFIG,
     DENTON_GYM_CONFIG,
@@ -16,6 +17,7 @@ import {
     CARROLLTON_TC_GYM_CONFIG,
     PLANO_TC_GYM_CONFIG
   } from '../config/wall-config';
+import { getMondayOfWeekForPicker } from '../utils/dateUtils';
 
   const GYM_CONFIGS = {
     design: DESIGN_GYM_CONFIG,
@@ -29,35 +31,46 @@ import {
   };
 
 const YellowPageExporter = () => {
-  const [selectedGym, setSelectedGym] = useState('design');
+  const [selectedGym, setSelectedGym] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   // Helper function to adjust for timezone
-  const createLocalDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Date(date.getTime() + date.getTimezoneOffset() * 60000);
-  };
+const createLocalDate = (dateString: string) => {
+  // Create date from the input string
+  const date = new Date(dateString);
+  
+  // Get UTC values
+  const utcYear = date.getUTCFullYear();
+  const utcMonth = date.getUTCMonth();
+  const utcDay = date.getUTCDate();
+  
+  // Create new date using local values
+  return new Date(utcYear, utcMonth, utcDay);
+};
 
   // Handle start date changes and validate it's a Monday
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const inputDate = createLocalDate(e.target.value);
+    const selectedDate = new Date(e.target.value + 'T00:00:00');
+    console.log('Selected date:', selectedDate);
+    console.log('Day of week:', selectedDate.getDay());
     
     // Check if it's a Monday (getDay() returns 0 for Sunday, 1 for Monday, etc.)
-    if (inputDate.getDay() !== 1) {
+    if (selectedDate.getDay() !== 1) {
       setError('Please select a Monday as the start date');
       setStartDate('');
       setEndDate('');
       return;
     }
-
+  
     // Calculate end date (13 days later to make it a 14-day period)
-    const endDate = new Date(inputDate);
-    endDate.setDate(inputDate.getDate() + 13);
-
-    // Format dates for state
+    const endDate = new Date(selectedDate);
+    endDate.setDate(selectedDate.getDate() + 13);
+  
+    // Format dates for state using local timezone
     setStartDate(e.target.value);
     setEndDate(endDate.toISOString().split('T')[0]);
     setError(null);
@@ -71,12 +84,9 @@ const YellowPageExporter = () => {
 
   // Function to get next Monday for min date attribute
   const getNextMonday = () => {
-    const today = new Date();
-    const day = today.getDay();
-    const diff = (day === 0 ? 1 : 8 - day); // If Sunday, get next Monday, else get to next Monday
-    const nextMonday = new Date(today);
-    nextMonday.setDate(today.getDate() + diff);
-    return nextMonday.toISOString().split('T')[0];
+    const nextMonday = getMondayOfWeekForPicker();
+    // Ensure we get YYYY-MM-DD in local timezone
+    return nextMonday.toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD format
   };
 
   const formatDateNoOffset = (dateStr: string) => {
@@ -233,9 +243,16 @@ const YellowPageExporter = () => {
   };
 
   return (
-    <Card className="w-full bg-slate-900 text-slate-200">
-      <CardHeader>
-        <CardTitle>Yellow Page Generator</CardTitle>
+    <Card className="max-w-md mx-auto bg-slate-900 text-slate-200">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Yellow Page Creator</CardTitle>
+        <Button 
+          variant="outline" 
+          className="bg-slate-700 text-slate-200"
+          onClick={() => router.push('/')}
+        >
+          Back to Schedule
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <Select value={selectedGym} onValueChange={setSelectedGym}>
@@ -243,9 +260,12 @@ const YellowPageExporter = () => {
             <SelectValue placeholder="Select a gym" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="design">Design District</SelectItem>
-            <SelectItem value="denton">Denton</SelectItem>
-            {/* Add other gyms */}
+          <SelectItem value="design">Design District</SelectItem>
+          <SelectItem value="denton">Denton</SelectItem>
+          <SelectItem value="hill">The Hill</SelectItem>
+          <SelectItem value="plano">Plano</SelectItem>
+          <SelectItem value="grapevine">Grapevine</SelectItem>
+          <SelectItem value="fortWorth">Fort Worth</SelectItem>
           </SelectContent>
         </Select>
 

@@ -97,7 +97,7 @@ const ScheduleContent: React.FC = () => {
                         gyms: {} as Record<string, any>
                       }
                 };
-               
+
                 const fetchWallsForGym = async (gym: Gym) => {
                     try {
                         const walls = await dataManager.fetchWalls(gym.id);

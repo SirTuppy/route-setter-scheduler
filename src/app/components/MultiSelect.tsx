@@ -96,6 +96,32 @@ const [activeGroup, setActiveGroup] = useState(() => {
     onChange(newIds);
   };
 
+
+    const sortItems = (itemsToSort: T[]) => {
+    return [...itemsToSort].sort((a, b) => {
+          const aValue = getDisplayValue(a);
+          const bValue = getDisplayValue(b);
+
+        const aMatch = aValue.match(/(\D+)(\d+)?/);
+        const bMatch = bValue.match(/(\D+)(\d+)?/);
+
+          if (aMatch && bMatch) {
+            const aPrefix = aMatch[1] || '';
+            const bPrefix = bMatch[1] || '';
+            const aNum = parseInt(aMatch[2] || '0', 10);
+            const bNum = parseInt(bMatch[2] || '0', 10);
+
+
+            if (aPrefix < bPrefix) return -1;
+            if (aPrefix > bPrefix) return 1;
+
+            return aNum - bNum;
+          }
+        
+        return aValue.localeCompare(bValue)
+      });
+    };
+
   return (
     <div className={cn("relative", className)} ref={wrapperRef}>
       <div
@@ -129,7 +155,7 @@ const [activeGroup, setActiveGroup] = useState(() => {
           )}
           <div className="max-h-80 overflow-auto p-1">
             <div className="grid grid-cols-2 gap-1">
-              {groupedItems[activeGroup]?.map(item => {
+              {sortItems(groupedItems[activeGroup] || []).map(item => {
                 const id = getId(item);
                 const displayValue = getDisplayValue(item);
                 const isSelected = selectedIds.includes(id);
@@ -137,19 +163,20 @@ const [activeGroup, setActiveGroup] = useState(() => {
 
                 return (
                   <Button
-                    key={id}
-                    variant={isSelected ? "secondary" : variant}
-                    size={size}
-                    className={cn(
-                      "text-left text-sm h-8 bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-700",
-                      isItemDisabled ? "opacity-50 pointer-events-none" : "",
-                      buttonClassName
-                    )}
-                    onClick={() => {
-                      if (isItemDisabled) return;
-                      handleSelectionChange(id, isSelected);
-                    }}
-                  >
+                  key={id}
+                  variant={isSelected ? "secondary" : variant}
+                  size={size}
+                  className={cn(
+                    "text-left text-sm h-8 bg-slate-700 text-slate-200 hover:bg-slate-600 border-slate-700",
+                    isItemDisabled ? "opacity-60 pointer-events-none" : "",
+                    isSelected ? "bg-cyan-400/50" : "", // Add overlay for selected items,
+                    buttonClassName
+                  )}
+                  onClick={() => {
+                    if (isItemDisabled) return;
+                    handleSelectionChange(id, isSelected);
+                  }}
+                >
                     {displayValue}
                   </Button>
                 );

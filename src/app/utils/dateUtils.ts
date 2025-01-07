@@ -1,5 +1,3 @@
-// Create a new file utils/dateUtils.ts
-
 /**
  * Standardizes a date to 6 AM UTC for consistent key generation
  * @param date The date to standardize
@@ -36,6 +34,22 @@ export const createStandardizedDate = (date?: Date): Date => {
     // Create new date with same local date but at midnight UTC
     const standardized = new Date(Date.UTC(year, month, day, 6, 0, 0, 0));
     return standardized;
+};
+
+/**
+ * Gets the Monday of the current week for any given date, without time standardization for use in date pickers
+ * @param date The date to get the Monday for. If not provided, uses current date
+ * @returns A Date object representing Monday of the week.
+ */
+export const getMondayOfWeekForPicker = (date?: Date): Date => {
+    const startingDate = date || new Date();
+    
+    const monday = new Date(startingDate);
+    while (monday.getDay() !== 1) {
+        monday.setDate(monday.getDate() - 1);
+    }
+    
+    return monday;
 };
 
 /**

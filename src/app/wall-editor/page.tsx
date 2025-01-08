@@ -4,17 +4,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight } from 'lucide-react';
 import { dataManager, Wall } from '../components/DataManager';
 import { usePermissions } from '../hooks/usePermissions';
 import { useRouter } from 'next/navigation';
-
-const GYM_GROUPS = [
-  { name: 'North Gyms', gyms: ['design', 'denton'] },
-  { name: 'East Gyms', gyms: ['plano', 'hill'] },
-  { name: 'West Gyms', gyms: ['grapevine', 'fortWorth'] },
-  { name: 'Training Centers', gyms: ['carrolltonTC', 'planoTC'] }
-];
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const GYM_NAMES: Record<string, string> = {
   design: 'Design District',
@@ -27,12 +21,46 @@ const GYM_NAMES: Record<string, string> = {
   planoTC: 'Plano TC'
 };
 
+const GYM_GROUPS = {
+  design: { color: 'bg-blue-900/20', border: 'border-blue-600' },
+  denton: { color: 'bg-blue-900/20', border: 'border-blue-600' },
+  plano: { color: 'bg-green-900/20', border: 'border-green-600' },
+  hill: { color: 'bg-green-900/20', border: 'border-green-600' },
+  grapevine: { color: 'bg-purple-900/20', border: 'border-purple-600' },
+  fortWorth: { color: 'bg-purple-900/20', border: 'border-purple-600' },
+  carrolltonTC: { color: 'bg-orange-900/20', border: 'border-orange-600' },
+  planoTC: { color: 'bg-orange-900/20', border: 'border-orange-600' }
+} as const;
+
+const sortWallsByName = (walls: Wall[]) => {
+  return [...walls].sort((a, b) => {
+    const aMatch = a.name.match(/(\D+)(\d+)?/);
+    const bMatch = b.name.match(/(\D+)(\d+)?/);
+
+    if (aMatch && bMatch) {
+      const aPrefix = aMatch[1] || '';
+      const bPrefix = bMatch[1] || '';
+      const aNum = parseInt(aMatch[2] || '0', 10);
+      const bNum = parseInt(bMatch[2] || '0', 10);
+
+      if (aPrefix < bPrefix) return -1;
+      if (aPrefix > bPrefix) return 1;
+
+      return aNum - bNum;
+    }
+    
+    return a.name.localeCompare(b.name);
+  });
+};
+
 export default function WallEditor() {
   const [walls, setWalls] = useState<Wall[]>([]);
   const [editingWall, setEditingWall] = useState<Wall | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [expandedGyms, setExpandedGyms] = useState<Record<string, boolean>>({});
+  const [expandedTypes, setExpandedTypes] = useState<Record<string, Record<string, boolean>>>({});
   const { isHeadSetter } = usePermissions();
   const router = useRouter();
 
@@ -41,6 +69,17 @@ export default function WallEditor() {
       try {
         const allWalls = await dataManager.fetchWalls();
         setWalls(allWalls);
+        const initialGymState = Object.keys(GYM_NAMES).reduce((acc, gym) => ({
+          ...acc, 
+          [gym]: true
+        }), {});
+        setExpandedGyms(initialGymState);
+
+        const initialTypeState = Object.keys(GYM_NAMES).reduce((acc, gym) => ({
+          ...acc,
+          [gym]: { boulder: true, rope: true }
+        }), {});
+        setExpandedTypes(initialTypeState);
       } catch (error) {
         setError('Failed to load walls');
       } finally {
@@ -52,24 +91,31 @@ export default function WallEditor() {
 
   const filteredWalls = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    return walls.filter(wall => 
+    
+    const filtered = walls.filter(wall => 
       wall.name.toLowerCase().includes(query) ||
       (GYM_NAMES[wall.gym_id]?.toLowerCase() || '').includes(query) ||
       wall.wall_type.toLowerCase().includes(query)
     );
+
+    return filtered.reduce((acc, wall) => {
+      if (!acc[wall.gym_id]) {
+        acc[wall.gym_id] = {
+          boulder: [],
+          rope: []
+        };
+      }
+      acc[wall.gym_id][wall.wall_type].push(wall);
+      return acc;
+    }, {} as Record<string, { boulder: Wall[], rope: Wall[] }>);
   }, [walls, searchQuery]);
 
   const handleSave = async (wall: Wall) => {
     try {
-      console.log('Saving wall:', wall);
       const { data, error } = await dataManager.updateWall(wall);
       
-      if (error) {
-        console.error('Error saving wall:', error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log('Wall saved successfully:', data);
       setWalls(walls.map(w => w.id === wall.id ? wall : w));
       setEditingWall(null);
     } catch (error) {
@@ -78,104 +124,203 @@ export default function WallEditor() {
     }
   };
 
-  const WallTable = ({ groupWalls }: { groupWalls: Wall[] }) => (
-    <table className="w-full text-slate-200">
-      <thead>
-        <tr className="border-b border-slate-700">
-          <th className="text-left p-2">Wall</th>
-          <th className="text-left p-2">Type</th>
-          <th className="text-left p-2">Angle</th>
-          <th className="text-left p-2">Difficulty</th>
-          <th className="text-left p-2">Climbs/Setter</th>
-          <th className="text-left p-2">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {groupWalls.map(wall => (
-          <tr key={wall.id} className="border-b border-slate-700">
-            {editingWall?.id === wall.id ? (
-              <>
-                <td className="p-2">{wall.name}</td>
-                <td className="p-2">
-                  <select
-                    value={editingWall.wall_type}
-                    onChange={e => setEditingWall({...editingWall, wall_type: e.target.value as 'boulder' | 'rope'})}
-                    className="bg-slate-700 border border-slate-600 rounded p-1 text-slate-200"
-                  >
-                    <option value="boulder">Boulder</option>
-                    <option value="rope">Rope</option>
-                  </select>
-                </td>
-                <td className="p-2">
-                  <select
-                    value={editingWall.angle || ''}
-                    onChange={e => setEditingWall({...editingWall, angle: e.target.value || null})}
-                    className="bg-slate-700 border border-slate-600 rounded p-1 text-slate-200"
-                  >
-                    <option value="">Select Angle</option>
-                    <option value="Slab">Slab</option>
-                    <option value="Vert">Vert</option>
-                    <option value="Overhang">Overhang</option>
-                    <option value="Steep">Steep</option>
-                  </select>
-                </td>
-                <td className="p-2">
-                  <Input
-                    type="number"
-                    value={editingWall.difficulty}
-                    onChange={e => setEditingWall({...editingWall, difficulty: Number(e.target.value)})}
-                    className="w-20 bg-slate-700 border-slate-600 text-slate-200"
-                  />
-                </td>
-                <td className="p-2">
-                  <Input
-                    type="number"
-                    value={editingWall.climbs_per_setter}
-                    onChange={e => setEditingWall({...editingWall, climbs_per_setter: Number(e.target.value)})}
-                    className="w-20 bg-slate-700 border-slate-600 text-slate-200"
-                  />
-                </td>
-                <td className="p-2 space-x-2">
-                  <Button
-                    size="sm"
-                    onClick={() => handleSave(editingWall)}
-                    className="bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setEditingWall(null)}
-                    className="border-slate-600 text-slate-200"
-                  >
-                    Cancel
-                  </Button>
-                </td>
-              </>
-            ) : (
-              <>
-                <td className="p-2">{wall.name}</td>
-                <td className="p-2">{wall.wall_type}</td>
-                <td className="p-2">{wall.angle || '-'}</td>
-                <td className="p-2">{wall.difficulty}</td>
-                <td className="p-2">{wall.climbs_per_setter}</td>
-                <td className="p-2">
-                  <Button
-                    size="sm"
-                    onClick={() => setEditingWall(wall)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    Edit
-                  </Button>
-                </td>
-              </>
-            )}
+  const WallTable = ({ walls, gymId }: { walls: Wall[], gymId: string }) => (
+    <div className={`rounded-lg border ${GYM_GROUPS[gymId].border} ${GYM_GROUPS[gymId].color} p-4`}>
+      <table className="w-full text-slate-200">
+        <thead>
+          <tr className="border-b border-slate-700">
+            <th className="text-left p-2 w-24">Wall</th>
+            <th className="text-left p-2 w-24">Type</th>
+            <th className="text-left p-2 w-24">Angle</th>
+            <th className="text-left p-2 w-24">Difficulty</th>
+            <th className="text-left p-2 w-28">Climbs/Setter</th>
+            <th className="text-left p-2 w-24">Actions</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {walls.map(wall => (
+            <tr key={wall.id} className="border-b border-slate-700">
+              {editingWall?.id === wall.id ? (
+                <>
+                  <td className="p-2">{wall.name}</td>
+                  <td className="p-2">
+                    <select
+                      value={editingWall.wall_type}
+                      onChange={e => setEditingWall({...editingWall, wall_type: e.target.value as 'boulder' | 'rope'})}
+                      className="bg-slate-700 border border-slate-600 rounded p-1 text-slate-200 w-full"
+                    >
+                      <option value="boulder">Boulder</option>
+                      <option value="rope">Rope</option>
+                    </select>
+                  </td>
+                  <td className="p-2">
+                    <select
+                      value={editingWall.angle || ''}
+                      onChange={e => setEditingWall({...editingWall, angle: e.target.value || null})}
+                      className="bg-slate-700 border border-slate-600 rounded p-1 text-slate-200 w-full"
+                    >
+                      <option value="">Select</option>
+                      <option value="Slab">Slab</option>
+                      <option value="Vert">Vert</option>
+                      <option value="Overhang">Overhang</option>
+                      <option value="Steep">Steep</option>
+                    </select>
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      type="number"
+                      value={editingWall.difficulty}
+                      onChange={e => setEditingWall({...editingWall, difficulty: Number(e.target.value)})}
+                      className="w-full bg-slate-700 border-slate-600 text-slate-200"
+                    />
+                  </td>
+                  <td className="p-2">
+                    <Input
+                      type="number"
+                      value={editingWall.climbs_per_setter}
+                      onChange={e => setEditingWall({...editingWall, climbs_per_setter: Number(e.target.value)})}
+                      className="w-full bg-slate-700 border-slate-600 text-slate-200"
+                    />
+                  </td>
+                  <td className="p-2 space-x-1">
+                    <Button
+                      size="sm"
+                      onClick={() => handleSave(editingWall)}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setEditingWall(null)}
+                      className="border-slate-600 text-slate-200"
+                    >
+                      Cancel
+                    </Button>
+                  </td>
+                </>
+              ) : (
+                <>
+                  <td className="p-2">{wall.name}</td>
+                  <td className="p-2">{wall.wall_type}</td>
+                  <td className="p-2">{wall.angle || '-'}</td>
+                  <td className="p-2">{wall.difficulty}</td>
+                  <td className="p-2">{wall.climbs_per_setter}</td>
+                  <td className="p-2">
+                    <Button
+                      size="sm"
+                      onClick={() => setEditingWall(wall)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      Edit
+                    </Button>
+                  </td>
+                </>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
+
+  const GymContent = ({ gymId, gymWalls }: { gymId: string, gymWalls: { boulder: Wall[], rope: Wall[] } }) => {
+    const hasRopeWalls = gymWalls.rope.length > 0;
+
+    if (hasRopeWalls) {
+      return (
+        <>
+          {['boulder', 'rope'].map(type => {
+            if (!gymWalls[type]?.length) return null;
+            return (
+              <Collapsible
+                key={`${gymId}-${type}`}
+                open={expandedTypes[gymId]?.[type]}
+                onOpenChange={(isOpen) => 
+                  setExpandedTypes({
+                    ...expandedTypes,
+                    [gymId]: {...expandedTypes[gymId], [type]: isOpen}
+                  })
+                }
+                className="ml-6 space-y-2"
+              >
+                <CollapsibleTrigger className="flex items-center text-md font-medium text-slate-300 hover:text-slate-200">
+                  {expandedTypes[gymId]?.[type] ? 
+                    <ChevronDown className="h-4 w-4 mr-2" /> : 
+                    <ChevronRight className="h-4 w-4 mr-2" />
+                  }
+                  {type.charAt(0).toUpperCase() + type.slice(1)} Walls
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4">
+                  <WallTable walls={sortWallsByName(gymWalls[type])} gymId={gymId} />
+                </CollapsibleContent>
+              </Collapsible>
+            );
+          })}
+        </>
+      );
+    }
+
+    return (
+      <div className="ml-6">
+        <WallTable walls={sortWallsByName(gymWalls.boulder)} gymId={gymId} />
+      </div>
+    );
+  };
+
+  const GymGrid = () => {
+    const gymPairs = Object.entries(GYM_NAMES).reduce<[string, string][]>((pairs, [gymId], index) => {
+      if (index % 2 === 0) {
+        pairs.push([gymId, Object.keys(GYM_NAMES)[index + 1]]);
+      }
+      return pairs;
+    }, []);
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {gymPairs.map(([gym1Id, gym2Id], index) => (
+          <div key={index} className="flex flex-col lg:flex-row gap-6">
+            {gym1Id && filteredWalls[gym1Id] && (
+              <div className="flex-1">
+                <Collapsible
+                  open={expandedGyms[gym1Id]}
+                  onOpenChange={(isOpen) => setExpandedGyms({...expandedGyms, [gym1Id]: isOpen})}
+                  className="space-y-2"
+                >
+                  <CollapsibleTrigger className="flex items-center w-full text-lg font-medium text-slate-200 hover:text-slate-100">
+                    {expandedGyms[gym1Id] ? <ChevronDown className="h-5 w-5 mr-2" /> : <ChevronRight className="h-5 w-5 mr-2" />}
+                    {GYM_NAMES[gym1Id]}
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4">
+                    <GymContent gymId={gym1Id} gymWalls={filteredWalls[gym1Id]} />
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
+            
+            {gym2Id && filteredWalls[gym2Id] && (
+              <div className="flex-1">
+                <Collapsible
+                  open={expandedGyms[gym2Id]}
+                  onOpenChange={(isOpen) => setExpandedGyms({...expandedGyms, [gym2Id]: isOpen})}
+                  className="space-y-2"
+                >
+                  <CollapsibleTrigger className="flex items-center w-full text-lg font-medium text-slate-200 hover:text-slate-100">
+                    {expandedGyms[gym2Id] ? <ChevronDown className="h-5 w-5 mr-2" /> : <ChevronRight className="h-5 w-5 mr-2" />}
+                    {GYM_NAMES[gym2Id]}
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4">
+                    <GymContent gymId={gym2Id} gymWalls={filteredWalls[gym2Id]} />
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   if (!isHeadSetter) {
     return (
@@ -196,7 +341,7 @@ export default function WallEditor() {
           <CardTitle className="text-2xl text-slate-100">Wall Editor</CardTitle>
           <div className="flex items-center gap-4">
             <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
               <Input
                 type="text"
                 placeholder="Search walls, gyms, or types..."
@@ -215,34 +360,7 @@ export default function WallEditor() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-8">
-            {GYM_GROUPS.map((group) => {
-              const groupWalls = filteredWalls.filter(wall => 
-                group.gyms.includes(wall.gym_id)
-              );
-              
-              if (groupWalls.length === 0) return null;
-
-              return (
-                <div key={group.name} className="space-y-4">
-                  <h2 className="text-xl font-semibold text-slate-200 border-b border-slate-600 pb-2">
-                    {group.name}
-                  </h2>
-                  {group.gyms.map(gymId => {
-                    const gymWalls = groupWalls.filter(wall => wall.gym_id === gymId);
-                    if (gymWalls.length === 0) return null;
-                    
-                    return (
-                      <div key={gymId} className="space-y-2">
-                        <h3 className="text-lg font-medium text-slate-300">{GYM_NAMES[gymId]}</h3>
-                        <WallTable groupWalls={gymWalls} />
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
+          <GymGrid />
           {error && (
             <div className="mt-4 p-2 bg-red-600/20 border border-red-600 rounded text-red-400">
               {error}

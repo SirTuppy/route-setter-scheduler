@@ -11,7 +11,7 @@ const USER_COLORS = [
   'bg-rose-500'
 ];
 
-const ACTIVITY_TIMEOUT = 60000; // 1 minute in milliseconds
+const ACTIVITY_TIMEOUT = 60000;
 
 interface ActiveUser {
   id: string;
@@ -29,21 +29,37 @@ interface LiveCellProps {
   onLockedStateChange: (locked: boolean) => void;
 }
 
+let activeCellRef: React.MutableRefObject<string | null> = { current: null };
+
 const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStateChange }) => {
   const { user } = useAuth();
   const [activeUsers, setActiveUsers] = useState<Map<string, ActiveUser>>(new Map());
   const [isFocused, setIsFocused] = useState(false);
   const channelRef = useRef<any>(null);
+  const cellRef = useRef<HTMLDivElement>(null);
   const cellId = `${gymId}-${date}`;
 
-  // Check if cell is locked by another user
+  // Handle document clicks
+  useEffect(() => {
+    const handleDocumentClick = (event: MouseEvent) => {
+      // If we're focused and click is outside the cell
+      if (isFocused && cellRef.current && !cellRef.current.contains(event.target as Node)) {
+        handleBlur();
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+    };
+  }, [isFocused]);
+
   const isLockedByOther = () => {
     const now = new Date().getTime();
     for (const [userId, userInfo] of activeUsers.entries()) {
       if (userId !== user?.id && userInfo.isEditing) {
         const lastActivity = new Date(userInfo.lastActivity).getTime();
         if (now - lastActivity < ACTIVITY_TIMEOUT) {
-          console.log('Cell locked by:', userInfo.name, 'Last activity:', new Date(userInfo.lastActivity).toLocaleString());
           return true;
         }
       }
@@ -54,7 +70,6 @@ const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStat
   useEffect(() => {
     if (!user) return;
 
-    console.log('Setting up presence channel for cell:', cellId);
     const channel = supabase.channel(`cell_presence:${cellId}`, {
       config: {
         presence: {
@@ -63,10 +78,8 @@ const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStat
       },
     });
 
-    // Handle presence state changes
     channel.on('presence', { event: 'sync' }, () => {
       const state = channel.presenceState();
-      console.log('Presence state updated:', state);
       
       const newActiveUsers = new Map();
       Object.entries(state).forEach(([key, presences]) => {
@@ -84,26 +97,23 @@ const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStat
       });
       
       setActiveUsers(newActiveUsers);
-      const isLocked = isLockedByOther();
-      console.log('Cell locked state:', isLocked);
-      onLockedStateChange(isLocked);
+      onLockedStateChange(isLockedByOther());
     });
 
-    // Subscribe to channel
     channel.subscribe();
     channelRef.current = channel;
 
     return () => {
-      console.log('Cleaning up presence channel for cell:', cellId);
+      if (isFocused) {
+        handleBlur();
+      }
       channel.unsubscribe();
     };
   }, [cellId, user]);
 
-  // Keep track of activity
   useEffect(() => {
     if (!isFocused || !user || !channelRef.current) return;
 
-    console.log('Starting activity tracking for user:', user.id);
     const updateActivity = async () => {
       await channelRef.current.track({
         user_id: user.id,
@@ -114,24 +124,23 @@ const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStat
       });
     };
 
-    // Initial update
     updateActivity();
 
     const interval = setInterval(updateActivity, ACTIVITY_TIMEOUT / 2);
     return () => {
-      console.log('Stopping activity tracking for user:', user.id);
       clearInterval(interval);
     };
   }, [isFocused, user]);
 
-  const handleFocus = async () => {
+  const handleFocus = async (event: React.MouseEvent | React.FocusEvent) => {
+    event.stopPropagation(); // Prevent the click from bubbling to document
+    
     if (!user || !channelRef.current || isLockedByOther()) {
-      console.log('Focus prevented - locked:', isLockedByOther());
       return;
     }
-    
-    console.log('Cell focused by user:', user.id);
+
     setIsFocused(true);
+    activeCellRef.current = cellId;
     
     const userName = user.email?.split('@')[0] || 'Unknown User';
     await channelRef.current.track({
@@ -145,8 +154,11 @@ const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStat
 
   const handleBlur = async () => {
     if (!user || !channelRef.current) return;
-    console.log('Cell blurred by user:', user.id);
+    
     setIsFocused(false);
+    if (activeCellRef.current === cellId) {
+      activeCellRef.current = null;
+    }
     await channelRef.current.untrack();
   };
 
@@ -164,16 +176,16 @@ const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStat
 
   return (
     <div
-      className={`relative group ${isLockedByOther() ? 'pointer-events-none opacity-50' : ''}`}
+      ref={cellRef}
+      className={`live-cell-container relative group ${isLockedByOther() ? 'pointer-events-none opacity-50' : ''}`}
       tabIndex={isLockedByOther() ? -1 : 0}
       onFocus={handleFocus}
-      onBlur={handleBlur}
       onClick={handleFocus}
+      data-cell-id={cellId}
     >
       <div className={`rounded-md transition-all duration-200 ${getBorderStyle()}`}>
         {children}
       </div>
-      {/* Active users indicators */}
       {activeUsers.size > 0 && (
         <div className="absolute -top-2 -right-2 flex -space-x-2">
           {Array.from(activeUsers.values()).map((activeUser) => (

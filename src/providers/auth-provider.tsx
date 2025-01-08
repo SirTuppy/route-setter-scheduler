@@ -100,7 +100,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 setSession(authData.session);
                 setUser(authData.user);
-                router.push('/');
+                // If they're a regular setter, send them to my-schedule
+                if (userData?.role === 'setter') {
+                    router.push('/my-schedule');
+                } else {
+                    // Head setters go to main schedule
+                    router.push('/');
+                }
             }
         } catch (error) {
             console.error('Sign in error:', error);

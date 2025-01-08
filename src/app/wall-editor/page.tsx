@@ -84,6 +84,7 @@ export default function WallEditor() {
         <tr className="border-b border-slate-700">
           <th className="text-left p-2">Wall</th>
           <th className="text-left p-2">Type</th>
+          <th className="text-left p-2">Angle</th>
           <th className="text-left p-2">Difficulty</th>
           <th className="text-left p-2">Climbs/Setter</th>
           <th className="text-left p-2">Actions</th>
@@ -103,6 +104,19 @@ export default function WallEditor() {
                   >
                     <option value="boulder">Boulder</option>
                     <option value="rope">Rope</option>
+                  </select>
+                </td>
+                <td className="p-2">
+                  <select
+                    value={editingWall.angle || ''}
+                    onChange={e => setEditingWall({...editingWall, angle: e.target.value || null})}
+                    className="bg-slate-700 border border-slate-600 rounded p-1 text-slate-200"
+                  >
+                    <option value="">Select Angle</option>
+                    <option value="Slab">Slab</option>
+                    <option value="Vert">Vert</option>
+                    <option value="Overhang">Overhang</option>
+                    <option value="Steep">Steep</option>
                   </select>
                 </td>
                 <td className="p-2">
@@ -143,6 +157,7 @@ export default function WallEditor() {
               <>
                 <td className="p-2">{wall.name}</td>
                 <td className="p-2">{wall.wall_type}</td>
+                <td className="p-2">{wall.angle || '-'}</td>
                 <td className="p-2">{wall.difficulty}</td>
                 <td className="p-2">{wall.climbs_per_setter}</td>
                 <td className="p-2">

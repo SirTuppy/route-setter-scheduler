@@ -24,6 +24,7 @@ interface ScheduleCellProps {
     scheduleData: Record<string, any>;
     updateData: (updater: (prev: any) => any) => void;
     groupColor: string;
+     isActive: boolean;
 }
 
 const ScheduleCell: React.FC<ScheduleCellProps> = ({
@@ -33,7 +34,8 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
     date,
     scheduleData,
     updateData,
-    groupColor
+    groupColor,
+    isActive
 }) => {
     const [isLocked, setIsLocked] = useState(false);
     const [localComment, setLocalComment] = useState('');
@@ -182,6 +184,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
             gymId={gym} 
             date={getStandardizedDateKey(date)}
             onLockedStateChange={setIsLocked}
+            isActive={isActive}
         >
             <div className={`${groupColor} border border-slate-700 rounded-md min-h-[200px]`}>
                 <div className="space-y-2 p-2">
@@ -229,7 +232,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                         variant="outline"
                         size="sm"
                         className="w-full"
-                        disabled={!isHeadSetter || isLocked || conflictingSetters.reduce((acc, id) => ({
+                         disabled={!isHeadSetter || isLocked || conflictingSetters.reduce((acc, id) => ({
                             ...acc,
                             [id]: true
                         }), {})}

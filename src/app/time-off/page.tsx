@@ -14,6 +14,7 @@ export default function TimeOffPage() {
   const { user } = useAuth();
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [dateError, setDateError] = useState('');
   const [useHours, setUseHours] = useState(false);
   const [hours, setHours] = useState('');
   const [reason, setReason] = useState('');
@@ -21,8 +22,40 @@ export default function TimeOffPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newStartDate = e.target.value;
+    setStartDate(newStartDate);
+    
+    // If end date exists and is now invalid, clear it
+    if (endDate && new Date(endDate) < new Date(newStartDate)) {
+      setEndDate('');
+      setDateError('End date cannot be before start date');
+    } else {
+      setDateError('');
+    }
+  };
+
+  const handleEndDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newEndDate = e.target.value;
+    
+    if (startDate && new Date(newEndDate) < new Date(startDate)) {
+      setDateError('End date cannot be before start date');
+      setEndDate('');
+    } else {
+      setEndDate(newEndDate);
+      setDateError('');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Additional validation before submission
+    if (new Date(endDate) < new Date(startDate)) {
+      setError('End date cannot be before start date');
+      return;
+    }
+    
     setLoading(true);
     setError(null);
 
@@ -57,7 +90,8 @@ export default function TimeOffPage() {
                 id="start-date"
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={handleStartDateChange}
+                min={new Date().toISOString().split('T')[0]} // Prevent past dates
                 required
                 className="w-full bg-slate-700 border-slate-600 text-slate-100"
               />
@@ -68,10 +102,14 @@ export default function TimeOffPage() {
                 id="end-date"
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={handleEndDateChange}
+                min={startDate || new Date().toISOString().split('T')[0]} // Prevent dates before start date
                 required
                 className="w-full bg-slate-700 border-slate-600 text-slate-100"
               />
+              {dateError && (
+                <p className="text-red-400 text-sm mt-1">{dateError}</p>
+              )}
             </div>
             <div className="flex items-center space-x-2">
               <Checkbox

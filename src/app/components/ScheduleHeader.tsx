@@ -11,6 +11,7 @@ import { SubmitTimeOffButton } from './SubmitTimeOffButton';
 import { ViewTimeOffButton } from './ViewTimeOffButton';
 import { WallEditorButton } from './WallEditorButton';
 import { YellowPageButton } from './YellowPageButton';
+import { MyScheduleButton } from './myScheduleButton';
 import UserMenu from './UserMenu';
 import { CalendarIcon } from '@radix-ui/react-icons';
 import { format } from 'date-fns';
@@ -80,6 +81,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     </PopoverContent>
                 </Popover>
         <UserMenu/>
+        <MyScheduleButton />
         <SubmitTimeOffButton />
         <ViewTimeOffButton />
         <WallEditorButton />

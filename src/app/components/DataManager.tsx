@@ -13,15 +13,16 @@ export interface Gym {
 }
 
 export interface Wall {
-    id: string;
-    name: string;
-    gym_id: string;
-    difficulty: number;
-    climbs_per_setter: number;
-    wall_type: 'boulder' | 'rope';
-    active: boolean;
-    created_at: string;
-    updated_at: string;
+  id: string;
+  name: string;
+  gym_id: string;
+  difficulty: number;
+  climbs_per_setter: number;
+  wall_type: 'boulder' | 'rope';
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  angle: 'Slab' | 'Vert' | 'Overhang' | 'Steep' | null;
 }
 
 export interface User {
@@ -69,10 +70,7 @@ interface ScheduleConflict {
 }
 
 class DataManager {
-    private supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-        );
+    private supabase = supabase;
 
        constructor() {
           //console.log('process.env', process.env)
@@ -423,11 +421,112 @@ async fetchUserDetails(userId: string): Promise<User | null> {
     }
   }
 
-  async fetchTimeOffRequests(userId?: string, status?: string): Promise<TimeOffRequest[]> {
+  // Time Off Operations
+  async updateTimeOffRequest(
+    id: string,
+    status: 'approved' | 'denied',
+    approvedBy: string,
+    reason?: string
+): Promise<void> {
+    try {
+        const updateData: any = {
+            status,
+            approved_by: approvedBy,
+            updated_at: new Date().toISOString()
+        };
+
+        if (reason && status === 'denied') {
+            updateData.reason = reason;
+        }
+
+        if (status === 'approved') {
+            // Get full request details first
+            const { data: request, error: requestError } = await this.supabase
+                .from('time_off')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (requestError) throw requestError;
+
+            // Fetch all schedule entries for the date range
+            const entries = await this.fetchScheduleEntries(
+                request.start_date,
+                request.end_date
+            );
+
+            // Remove setter from any conflicting schedule entries
+            for (const entry of entries) {
+                if (entry.setters.includes(request.user_id) && entry.gym_id !== 'vacation') {
+                    console.log('Removing setter from schedule entry:', {
+                        entryId: entry.id,
+                        date: entry.schedule_date,
+                        gym: entry.gym_id
+                    });
+
+                    const updatedSetters = entry.setters.filter(setterId => 
+                        setterId !== request.user_id
+                    );
+
+                    const { error: updateError } = await this.supabase
+                        .from('schedule_setters')
+                        .delete()
+                        .eq('schedule_entry_id', entry.id)
+                        .eq('user_id', request.user_id);
+
+                    if (updateError) {
+                        console.error('Error removing setter from schedule:', updateError);
+                        throw updateError;
+                    }
+                }
+            }
+        }
+
+        // Update the time off request status
+        const { error: updateError } = await this.supabase
+            .from('time_off')
+            .update(updateData)
+            .eq('id', id);
+
+        if (updateError) throw updateError;
+
+        // If approved, create vacation schedule entry
+        if (status === 'approved') {
+            try {
+                const { data: timeOffRequest } = await this.supabase
+                    .from('time_off')
+                    .select(`
+                        *,
+                        users!time_off_user_id_fkey (
+                            name,
+                            email
+                        )
+                    `)
+                    .eq('id', id)
+                    .single();
+
+                if (timeOffRequest) {
+                    await this.createVacationScheduleEntry(timeOffRequest);
+                }
+            } catch (error) {
+                console.error('Error creating vacation schedule entry:', error);
+                throw error;
+            }
+        }
+    } catch (error) {
+        console.error('Error in updateTimeOffRequest:', error);
+        throw new SchedulerError(
+            'Failed to update time off request: ' + (error instanceof Error ? error.message : 'Unknown error'),
+            ErrorCodes.DATA_UPDATE_ERROR
+        );
+    }
+}
+
+async fetchTimeOffRequests(userId?: string, status?: string): Promise<TimeOffRequest[]> {
     try {
         let query = this.supabase
             .from('time_off')
-            .select(`
+           .select(`
                 *,
                 users!time_off_user_id_fkey (
                     name,
@@ -457,83 +556,6 @@ async fetchUserDetails(userId: string): Promise<User | null> {
         throw new SchedulerError('Failed to fetch time off requests', ErrorCodes.DATA_FETCH_ERROR);
     }
 }
-
-async updateTimeOffRequest(
-  id: string,
-  status: 'approved' | 'denied',
-  approvedBy: string,
-  reason?: string
- ): Promise<TimeOffRequest> {
-  try {
-    const updateData: any = {
-      status,
-      approved_by: approvedBy,
-      updated_at: new Date().toISOString()
-    };
- 
-    if (reason) {
-      updateData.reason = reason;
-    }
- 
-    if (status === 'approved') {
-      // Get full request details
-      const { data: request, error: requestError } = await this.supabase
-        .from('time_off')
-        .select('*')
-        .eq('id', id)
-        .single();
- 
-      if (requestError) throw requestError;
- 
-      // Remove setter from any conflicting schedule entries
-      const entries = await this.fetchScheduleEntries(
-        request.start_date, 
-        request.end_date
-      );
- 
-      for (const entry of entries) {
-        if (entry.setters.includes(request.user_id) && entry.gym_id !== 'vacation') {
-          await this.updateScheduleEntry({
-            ...entry,
-            setters: entry.setters.filter(setterId => setterId !== request.user_id)
-          });
-        }
-      }
-    }
- 
-    const { data, error } = await this.supabase
-      .from('time_off')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        users!time_off_user_id_fkey (
-          name,
-          email
-        )
-      `)
-      .single();
- 
-    if (error) {
-      console.error('Error updating time off request:', error);
-      throw error;
-    }
- 
-    // If approved, create vacation schedule entry
-    if (status === 'approved') {
-      try {
-        await this.createVacationScheduleEntry(data);
-      } catch (error) {
-        console.error('Error creating vacation schedule entry:', error);
-      }
-    }
- 
-    return data;
-  } catch (error) {
-    console.error('Error in updateTimeOffRequest:', error);
-    throw new SchedulerError('Failed to update time off request', ErrorCodes.DATA_UPDATE_ERROR);
-  }
- }
 
 private async createVacationScheduleEntry(timeOff: TimeOffRequest): Promise<void> {
     // Helper function to create date range
@@ -584,6 +606,7 @@ async updateWall(wall: Wall) {
         difficulty: wall.difficulty,
         climbs_per_setter: wall.climbs_per_setter,
         wall_type: wall.wall_type,
+        angle: wall.angle,  // Updated from type to angle
         updated_at: new Date().toISOString()
       })
       .eq('id', wall.id)

@@ -1,3 +1,4 @@
+// YellowPageExporter.tsx
 import React, { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,28 +8,13 @@ import { dataManager } from './DataManager';
 import { PDFDocument } from 'pdf-lib';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/providers/auth-provider'; // Import the auth hook
 import { 
-    DESIGN_GYM_CONFIG,
-    DENTON_GYM_CONFIG,
-    HILL_GYM_CONFIG,
-    PLANO_GYM_CONFIG,
-    GRAPEVINE_GYM_CONFIG,
-    FORT_WORTH_GYM_CONFIG,
-    CARROLLTON_TC_GYM_CONFIG,
-    PLANO_TC_GYM_CONFIG
-  } from '../config/wall-config';
-import { getMondayOfWeekForPicker } from '../utils/dateUtils';
-
-  const GYM_CONFIGS = {
-    design: DESIGN_GYM_CONFIG,
-    denton: DENTON_GYM_CONFIG,
-    hill: HILL_GYM_CONFIG,
-    plano: PLANO_GYM_CONFIG,
-    grapevine: GRAPEVINE_GYM_CONFIG,
-    fortWorth: FORT_WORTH_GYM_CONFIG,
-    carrolltonTC: CARROLLTON_TC_GYM_CONFIG,
-    planoTC: PLANO_TC_GYM_CONFIG
-  };
+  getStandardizedDateKey, 
+  getDateForDatabase, 
+  createStandardizedDate,
+  getMondayOfWeekForPicker
+} from '../utils/dateUtils';
 
 const YellowPageExporter = () => {
   const [selectedGym, setSelectedGym] = useState('');
@@ -37,8 +23,10 @@ const YellowPageExporter = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+  const { user } = useAuth(); // Get the user data from the auth provider
 
-  // Helper function to adjust for timezone
+
+   // Helper function to adjust for timezone
 const createLocalDate = (dateString: string) => {
   // Create date from the input string
   const date = new Date(dateString);
@@ -53,28 +41,27 @@ const createLocalDate = (dateString: string) => {
 };
 
   // Handle start date changes and validate it's a Monday
+  // Update handleStartDateChange to be stricter about Mondays
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedDate = new Date(e.target.value + 'T00:00:00');
-    console.log('Selected date:', selectedDate);
-    console.log('Day of week:', selectedDate.getDay());
-    
-    // Check if it's a Monday (getDay() returns 0 for Sunday, 1 for Monday, etc.)
-    if (selectedDate.getDay() !== 1) {
-      setError('Please select a Monday as the start date');
-      setStartDate('');
-      setEndDate('');
-      return;
-    }
+  const selectedDate = new Date(e.target.value + 'T00:00:00'); // Force midnight
+  console.log('Selected date:', selectedDate, 'Day:', selectedDate.getDay());
   
-    // Calculate end date (13 days later to make it a 14-day period)
-    const endDate = new Date(selectedDate);
-    endDate.setDate(selectedDate.getDate() + 13);
+  // Check if it's a Monday (1)
+  if (selectedDate.getDay() !== 1) {
+    setError('Please select a Monday as the start date');
+    setStartDate('');
+    setEndDate('');
+    return;
+  }
+
+  // Calculate end date (13 days later for a 14-day period)
+  const endDate = new Date(selectedDate);
+  endDate.setDate(selectedDate.getDate() + 13);
   
-    // Format dates for state using local timezone
-    setStartDate(e.target.value);
-    setEndDate(endDate.toISOString().split('T')[0]);
-    setError(null);
-  };
+  setStartDate(e.target.value);
+  setEndDate(endDate.toISOString().split('T')[0]);
+  setError(null);
+};
 
   // Function to format date for display (M/D format)
   const formatDisplayDate = (dateString: string) => {
@@ -95,132 +82,203 @@ const createLocalDate = (dateString: string) => {
     return `${date.getMonth() + 1}/${date.getDate()}`;
   };
 
-  const generateYellowPage = async () => {
+  // Helper function to get dates in range (excluding weekends)
+  const getDatesInRange = (startDate: Date, endDate: Date) => {
+    const dates = [];
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+      // No more weekend filtering - include all dates
+      dates.push(createStandardizedDate(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    return dates;
+  };
+
+  const downloadTemplate = async (selectedGym: string) => {
+      const templateFileName = `${selectedGym}-yellow-page.pdf`;
+        console.log("Attempting to download:", templateFileName)
+
+       const { data, error } = await supabase.storage
+         .from('yellow-page-templates')
+         .download(templateFileName);
+
+        if (error) {
+         console.error('Error loading template:', error);
+         throw new Error(`Failed to load template: ${error.message}`);
+       }
+
+       if (!data) {
+            console.error('No template data loaded.');
+           throw new Error("No template data returned from Supabase.")
+         }
+
+      return data;
+   }
+
+   const generateYellowPage = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      const gymConfig = GYM_CONFIGS[selectedGym];
-      if (!gymConfig) {
-        throw new Error('No configuration found for selected gym');
+      // Check if user is head setter
+      if (user?.user_metadata?.role !== 'head_setter') {
+        setError('You must be a head setter to download the Yellow Page.');
+        setLoading(false);
+        return;
       }
   
-      const hasRopeWalls = Object.values(gymConfig.walls).some(wall => wall.type === 'rope');
+      // Fetch all walls for the selected gym once at the start
+      const gymWalls = await dataManager.fetchWalls(selectedGym);
+      const wallsMap = new Map(gymWalls.map(wall => [wall.id, wall]));
+      
+      // Function to get wall info
+      const getWallInfo = (wallId: string) => {
+        const wall = wallsMap.get(wallId);
+        if (!wall) return null;
+        return {
+          type: wall.wall_type,
+          name: wall.name,
+          angle: wall.angle
+        };
+      };
   
-      const { data: templateData, error: templateError } = await supabase
-        .storage
-        .from('yellow-page-templates')
-        .download(`${selectedGym}-yellow-page.pdf`);
-        
-      if (templateError) throw new Error('Failed to load template');
-      if (!templateData) throw new Error('No template found');
-  
+      const templateData = await downloadTemplate(selectedGym);
       const pdfDoc = await PDFDocument.load(await templateData.arrayBuffer(), {
         updateMetadata: false,
         ignoreEncryption: true,
       });
-      
-      const form = pdfDoc.getForm();
   
+      const form = pdfDoc.getForm();
+      
+      // Create standardized dates
+      const startDateTime = createStandardizedDate(new Date(startDate));
+      const endDateTime = createStandardizedDate(new Date(endDate));
+      
       // Add date range to both pages
       const dateRange = `${formatDateNoOffset(startDate)}-${formatDateNoOffset(endDate)}`;
       const dateRangeField1 = form.getTextField('Date Range');
       if (dateRangeField1) dateRangeField1.setText(dateRange);
   
+      // Check if gym has rope walls
+      const hasRopeWalls = gymWalls.some(wall => wall.wall_type === 'rope');
+      
       if (hasRopeWalls) {
         const dateRangeField2 = form.getTextField('Date Range 2');
         if (dateRangeField2) dateRangeField2.setText(dateRange);
       }
   
-      // Generate all dates in the range
-      const dates: Date[] = [];
-      let currentDate = new Date(startDate);
-      const endDateObj = new Date(endDate);
-      while (currentDate <= endDateObj) {
-        dates.push(new Date(currentDate));
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
+      // Get all dates in range, standardized and excluding weekends
+      const dates = getDatesInRange(startDateTime, endDateTime);
   
-      const scheduleData = await dataManager.fetchScheduleEntries(startDate, endDate);
+      // Fetch schedule data using database-formatted dates
+      const scheduleData = await dataManager.fetchScheduleEntries(
+        getDateForDatabase(startDateTime),
+        getDateForDatabase(endDateTime)
+      );
       const gymEntries = scheduleData.filter(entry => entry.gym_id === selectedGym);
-  
-      const cleanWallId = (wallId: string) => {
-        const prefix = `${selectedGym}-`;
-        return wallId.startsWith(prefix) ? wallId.slice(prefix.length) : wallId;
-      };
-  
-      const getWallType = (wallId: string) => {
-        const cleanId = cleanWallId(wallId);
-        return gymConfig.walls[cleanId]?.type;
-      };
-  
-      // Create a map of date strings to entries for easy lookup
+      
+      // Create entry map using standardized keys
       const entryMap = new Map(
-        gymEntries.map(entry => [entry.schedule_date, entry])
+        gymEntries.map(entry => [
+          getStandardizedDateKey(new Date(entry.schedule_date)),
+          entry
+        ])
       );
   
-      // Fill all dates for rope page first
+      // Fill rope walls
       if (hasRopeWalls) {
         dates.forEach((date, index) => {
           const rowNumber = index + 1;
-          if (rowNumber > 14) return; // Only first 14 rows for first page
+          if (rowNumber > 14) return;
   
           const dateField = form.getTextField(`Date ${rowNumber}`);
           const locationField = form.getTextField(`Location ${rowNumber}`);
+          const typeField = form.getTextField(`Climb Type ${rowNumber}`);
           const settersField = form.getTextField(`# of Setters ${rowNumber}`);
   
           if (dateField) {
-            const dateStr = formatDateNoOffset(date.toISOString());
-            dateField.setText(dateStr);
+            dateField.setText(formatDateNoOffset(date.toISOString()));
           }
   
-          const entry = entryMap.get(date.toISOString().split('T')[0]);
+          const entry = entryMap.get(getStandardizedDateKey(date));
           
-          if (entry && entry.walls.some(wallId => getWallType(wallId) === 'rope')) {
-            const wallNames = entry.walls
-              .filter(wallId => getWallType(wallId) === 'rope')
-              .map(wallId => cleanWallId(wallId));
+          if (entry) {
+            const ropeWalls = entry.walls
+              .map(wallId => getWallInfo(wallId))
+              .filter(wall => wall && wall.type === 'rope');
   
-            if (locationField) locationField.setText(wallNames.join(', '));
-            if (settersField) settersField.setText(entry.setters.length.toString());
+            if (ropeWalls.length > 0) {
+              const wallNames = ropeWalls.map(wall => wall.name);
+              if (locationField) locationField.setText(wallNames.join(', '));
+              
+              // Set type field to angles in matching order
+              if (typeField) {
+                const angles = ropeWalls.map(wall => wall.angle || '—');
+                typeField.setText(angles.join(', '));
+              }
+              
+              if (settersField) settersField.setText(entry.setters.length.toString());
+            } else {
+              if (locationField) locationField.setText('—');
+              if (typeField) typeField.setText('—');
+              if (settersField) settersField.setText('—');
+            }
           } else {
             if (locationField) locationField.setText('—');
+            if (typeField) typeField.setText('—');
             if (settersField) settersField.setText('—');
           }
         });
       }
   
-      // Fill all dates for boulder page
+      // Fill boulder walls
       const boulderStartIndex = hasRopeWalls ? 15 : 1;
       dates.forEach((date, index) => {
-        if (!hasRopeWalls && index >= 14) return; // Only first 14 rows for boulder-only gyms
-        if (hasRopeWalls && index >= 14) return; // Only second 14 rows for mixed gyms
+        if (!hasRopeWalls && index >= 14) return;
+        if (hasRopeWalls && index >= 14) return;
   
         const rowNumber = hasRopeWalls ? boulderStartIndex + index : index + 1;
         const dateField = form.getTextField(`Date ${rowNumber}`);
         const locationField = form.getTextField(`Location ${rowNumber}`);
+        const typeField = form.getTextField(`Climb Type ${rowNumber}`);
         const settersField = form.getTextField(`# of Setters ${rowNumber}`);
   
         if (dateField) {
-          const dateStr = formatDateNoOffset(date.toISOString());
-          dateField.setText(dateStr);
+          dateField.setText(formatDateNoOffset(date.toISOString()));
         }
   
-        const entry = entryMap.get(date.toISOString().split('T')[0]);
+        const entry = entryMap.get(getStandardizedDateKey(date));
         
-        if (entry && entry.walls.some(wallId => getWallType(wallId) === 'boulder')) {
-          const wallNames = entry.walls
-            .filter(wallId => getWallType(wallId) === 'boulder')
-            .map(wallId => cleanWallId(wallId));
+        if (entry) {
+          const boulderWalls = entry.walls
+            .map(wallId => getWallInfo(wallId))
+            .filter(wall => wall && wall.type === 'boulder');
   
-          if (locationField) locationField.setText(wallNames.join(', '));
-          if (settersField) settersField.setText(entry.setters.length.toString());
+          if (boulderWalls.length > 0) {
+            const wallNames = boulderWalls.map(wall => wall.name);
+            if (locationField) locationField.setText(wallNames.join(', '));
+            
+            // Set type field to angles in matching order
+            if (typeField) {
+              const angles = boulderWalls.map(wall => wall.angle || '—');
+              typeField.setText(angles.join(', '));
+            }
+            
+            if (settersField) settersField.setText(entry.setters.length.toString());
+          } else {
+            if (locationField) locationField.setText('—');
+            if (typeField) typeField.setText('—');
+            if (settersField) settersField.setText('—');
+          }
         } else {
           if (locationField) locationField.setText('—');
+          if (typeField) typeField.setText('—');
           if (settersField) settersField.setText('—');
         }
       });
   
+      // Save and download PDF
       const pdfBytes = await pdfDoc.save({
         useObjectStreams: false,
       });
@@ -260,12 +318,14 @@ const createLocalDate = (dateString: string) => {
             <SelectValue placeholder="Select a gym" />
           </SelectTrigger>
           <SelectContent>
-          <SelectItem value="design">Design District</SelectItem>
-          <SelectItem value="denton">Denton</SelectItem>
-          <SelectItem value="hill">The Hill</SelectItem>
-          <SelectItem value="plano">Plano</SelectItem>
-          <SelectItem value="grapevine">Grapevine</SelectItem>
-          <SelectItem value="fortWorth">Fort Worth</SelectItem>
+            <SelectItem value="design">Design District</SelectItem>
+            <SelectItem value="denton">Denton</SelectItem>
+            <SelectItem value="hill">The Hill</SelectItem>
+            <SelectItem value="plano">Plano</SelectItem>
+            <SelectItem value="grapevine">Grapevine</SelectItem>
+            <SelectItem value="fortWorth">Fort Worth</SelectItem>
+             <SelectItem value="carrolltonTC">Carrollton TC</SelectItem>
+            <SelectItem value="planoTC">Plano TC</SelectItem>
           </SelectContent>
         </Select>
 
@@ -292,14 +352,16 @@ const createLocalDate = (dateString: string) => {
             <div className="text-red-500 text-sm">{error}</div>
           )}
         </div>
-
+        {!selectedGym && startDate && endDate && (
+  <div className="text-amber-500 text-sm">Please select a gym to generate the Yellow Page.</div>
+)}
         <Button
-          onClick={generateYellowPage}
-          className="w-full bg-blue-600 hover:bg-blue-700"
-          disabled={loading || !startDate || !endDate}
-        >
-          {loading ? 'Generating...' : 'Generate Yellow Page'}
-        </Button>
+  onClick={generateYellowPage}
+  className="w-full bg-blue-600 hover:bg-blue-700"
+  disabled={loading || !startDate || !endDate || !selectedGym}  // Added !selectedGym check
+>
+  {loading ? 'Generating...' : 'Generate Yellow Page'}
+</Button>
       </CardContent>
     </Card>
   );

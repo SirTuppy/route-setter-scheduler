@@ -1,8 +1,9 @@
+// ViewTimeOffPage.tsx
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/providers/auth-provider';
-import { dataManager, TimeOffRequest, User } from '../../components/DataManager';
+import { dataManager, TimeOffRequest, User, ScheduleConflict } from '../../components/DataManager';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,13 +31,30 @@ export default function ViewTimeOffPage() {
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflicts, setConflicts] = useState<ScheduleConflict[]>([]);
 
-  // Memoize isHeadSetter to prevent unnecessary recalculations
   const isHeadSetter = useMemo(() => 
     userDetails?.role === 'head_setter',
     [userDetails?.role]
   );
+  console.log('userDetails:', userDetails);
 
-  // Single useEffect for data loading
+  const refetchData = async () => {
+    if (!user?.id) return;
+
+    try {
+      const fetchedRequests = await dataManager.fetchTimeOffRequests(
+        isHeadSetter ? undefined : user.id
+      );
+
+      setRequests({
+        pending: fetchedRequests.filter(r => r.status === 'pending'),
+        approved: fetchedRequests.filter(r => r.status === 'approved'),
+        denied: fetchedRequests.filter(r => r.status === 'denied'),
+      });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unknown error occurred');
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -44,16 +62,13 @@ export default function ViewTimeOffPage() {
       if (!user?.id) return;
       
       try {
-        // Get user details
         const details = await dataManager.fetchUserDetails(user.id);
         if (!mounted) return;
         
         setUserDetails(details);
-        const isHead = details?.role === 'head_setter';
         
-        // Fetch requests based on role
         const fetchedRequests = await dataManager.fetchTimeOffRequests(
-          isHead ? undefined : user.id
+          details?.role === 'head_setter' ? undefined : user.id
         );
         
         if (!mounted) return;
@@ -63,22 +78,39 @@ export default function ViewTimeOffPage() {
           approved: fetchedRequests.filter(r => r.status === 'approved'),
           denied: fetchedRequests.filter(r => r.status === 'denied'),
         });
-      } catch (error: any) {
-        if (mounted) setError(error.message);
+      } catch (error) {
+        if (mounted) setError(error instanceof Error ? error.message : 'An unknown error occurred');
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
-    setLoading(true);
-    loadData();
+    if (user) {
+      setLoading(true);
+      loadData();
+    }
 
     return () => {
       mounted = false;
     };
   }, [user?.id]);
 
-  // Handler for approving requests
+  const approveRequest = async (request: TimeOffRequest) => {
+    if (!user?.id) return;
+
+    try {
+      await dataManager.updateTimeOffRequest(
+        request.id,
+        'approved',
+        user.id
+      );
+      await refetchData();
+      setError(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unknown error occurred');
+    }
+  };
+
   const handleApprove = async (request: TimeOffRequest) => {
     if (!user?.id) return;
     
@@ -97,41 +129,24 @@ export default function ViewTimeOffPage() {
       }
   
       await approveRequest(request);
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unknown error occurred');
     }
   };
 
   const handleApproveWithConflicts = async () => {
-    if (!selectedRequest) return;
+    if (!selectedRequest || !user?.id) return;
     
     try {
       await approveRequest(selectedRequest);
       setShowConflictDialog(false);
       setSelectedRequest(null);
       setConflicts([]);
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unknown error occurred');
     }
   };
 
-  const approveRequest = async (request: TimeOffRequest) => {
-    if (!user?.id) return;
-  
-    await dataManager.updateTimeOffRequest(
-      request.id,
-      'approved',
-      user.id
-    );
-  
-    setRequests(prev => ({
-      pending: prev.pending.filter(r => r.id !== request.id),
-      approved: [...prev.approved, { ...request, status: 'approved' }],
-      denied: prev.denied
-    }));
-  };
-
-  // Handler for denying requests
   const handleDeny = async () => {
     if (!selectedRequest || !denyReason || !user?.id) return;
 
@@ -143,39 +158,13 @@ export default function ViewTimeOffPage() {
         denyReason
       );
 
-      // Optimistically update the UI
-      setRequests(prev => ({
-        pending: prev.pending.filter(r => r.id !== selectedRequest.id),
-        approved: prev.approved,
-        denied: [...prev.denied, { ...selectedRequest, status: 'denied', reason: denyReason }]
-      }));
-
+      await refetchData();
       setShowDenyDialog(false);
       setDenyReason('');
       setSelectedRequest(null);
-    } catch (error: any) {
-      setError(error.message);
-      // If error occurs, reload the full data
-      loadData();
-    }
-  };
-
-  // Function to load data (used for error recovery)
-  const loadData = async () => {
-    if (!user?.id || !userDetails) return;
-    
-    try {
-      const fetchedRequests = await dataManager.fetchTimeOffRequests(
-        isHeadSetter ? undefined : user.id
-      );
-
-      setRequests({
-        pending: fetchedRequests.filter(r => r.status === 'pending'),
-        approved: fetchedRequests.filter(r => r.status === 'approved'),
-        denied: fetchedRequests.filter(r => r.status === 'denied'),
-      });
-    } catch (error: any) {
-      setError(error.message);
+      setError(null);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'An unknown error occurred');
     }
   };
 

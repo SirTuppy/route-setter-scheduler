@@ -15,7 +15,7 @@ export const SubmitTimeOffButton = () => {
       onClick={() => router.push('/time-off')}
     >
       <Clock size={16} />
-      Submit Time Off
+      Request Time Off
     </Button>
   );
 };

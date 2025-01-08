@@ -6,6 +6,7 @@ import { User } from './DataManager';
 import { dataManager } from './DataManager';
 import { getStandardizedDateKey, getDateForDatabase } from '../utils/dateUtils';
 import { useAuth } from '@/providers/auth-provider';
+import LiveCell from './LiveCell';
 
 interface Wall {
     id: string;
@@ -34,6 +35,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
     updateData,
     groupColor
 }) => {
+    const [isLocked, setIsLocked] = useState(false);
     const [localComment, setLocalComment] = useState('');
     const [isCommentModified, setIsCommentModified] = useState(false);
     const { user } = useAuth();
@@ -176,66 +178,78 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
     };
 
     return (
-        <div className={`${groupColor} border border-slate-700 rounded-md min-h-[200px]`}>
-            <div className="space-y-2 p-2">
-                {gym !== 'vacation' && (
-                    <>
-                        <MultiSelect<Wall>
-                            items={walls}
-                            selectedIds={currentData.walls || []}
-                            onChange={wallIds => updateLocalData('walls', wallIds)}
-                            getDisplayValue={getWallDisplayValue}
-                            getId={getWallId}
-                            groupBy={(wall) => wall.wall_type === 'boulder' ? 'Boulder Walls' : 'Rope Walls'}
-                            placeholder={isHeadSetter ? "Select walls" : "Walls (view only)"}
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            disabled={!isHeadSetter}
-                        />
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="p-2 bg-slate-700 rounded text-slate-200"
-                                style={{ backgroundColor: getDifficultyColor(metrics.difficulty) }}>
-                                Difficulty: {metrics.difficulty}
-                            </div>
-                            <div className="p-2 bg-slate-700 rounded text-slate-200">
-                                Climbs: {metrics.climbs}
-                            </div>
+        <LiveCell 
+            gymId={gym} 
+            date={getStandardizedDateKey(date)}
+            onLockedStateChange={setIsLocked}
+        >
+            <div className={`${groupColor} border border-slate-700 rounded-md min-h-[200px]`}>
+                <div className="space-y-2 p-2">
+                    {isLocked && !isHeadSetter && (
+                        <div className="text-amber-500 text-sm mb-2">
+                            This cell is being edited by another user
                         </div>
-                    </>
-                )}
+                    )}
+                    
+                    {gym !== 'vacation' && (
+                        <>
+                            <MultiSelect<Wall>
+                                items={walls}
+                                selectedIds={currentData.walls || []}
+                                onChange={wallIds => updateLocalData('walls', wallIds)}
+                                getDisplayValue={getWallDisplayValue}
+                                getId={getWallId}
+                                groupBy={(wall) => wall.wall_type === 'boulder' ? 'Boulder Walls' : 'Rope Walls'}
+                                placeholder={isHeadSetter ? "Select walls" : "Walls (view only)"}
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                                disabled={!isHeadSetter || isLocked}
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="p-2 bg-slate-700 rounded text-slate-200"
+                                    style={{ backgroundColor: getDifficultyColor(metrics.difficulty) }}>
+                                    Difficulty: {metrics.difficulty}
+                                </div>
+                                <div className="p-2 bg-slate-700 rounded text-slate-200">
+                                    Climbs: {metrics.climbs}
+                                </div>
+                            </div>
+                        </>
+                    )}
 
-                <MultiSelect<User>
-                    items={setters}
-                    selectedIds={currentData.setters || []}
-                    onChange={setterIds => updateLocalData('setters', setterIds)}
-                    getDisplayValue={getSetterDisplayValue}
-                    getId={getSetterId}
-                    groupBy={setterGrouping}
-                    placeholder={isHeadSetter ? "Select setters" : "Setters (view only)"}
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    disabled={!isHeadSetter || conflictingSetters.reduce((acc, id) => ({
-                        ...acc,
-                        [id]: true
-                    }), {})}
-                />
+                    <MultiSelect<User>
+                        items={setters}
+                        selectedIds={currentData.setters || []}
+                        onChange={setterIds => updateLocalData('setters', setterIds)}
+                        getDisplayValue={getSetterDisplayValue}
+                        getId={getSetterId}
+                        groupBy={setterGrouping}
+                        placeholder={isHeadSetter ? "Select setters" : "Setters (view only)"}
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        disabled={!isHeadSetter || isLocked || conflictingSetters.reduce((acc, id) => ({
+                            ...acc,
+                            [id]: true
+                        }), {})}
+                    />
 
-                <Input
-                    className="bg-slate-800 text-slate-200 border-slate-700"
-                    value={localComment}
-                    onChange={e => {
-                        if (!isHeadSetter) return;
-                        setLocalComment(e.target.value);
-                        setIsCommentModified(true);
-                    }}
-                    onBlur={handleCommentBlur}
-                    placeholder={isHeadSetter ? "Add comments..." : "Comments (view only)"}
-                    readOnly={!isHeadSetter}
-                />             
+                    <Input
+                        className="bg-slate-800 text-slate-200 border-slate-700"
+                        value={localComment}
+                        onChange={e => {
+                            if (!isHeadSetter || isLocked) return;
+                            setLocalComment(e.target.value);
+                            setIsCommentModified(true);
+                        }}
+                        onBlur={handleCommentBlur}
+                        placeholder={isHeadSetter ? "Add comments..." : "Comments (view only)"}
+                        readOnly={!isHeadSetter || isLocked}
+                    />             
+                </div>
             </div>
-        </div>
+        </LiveCell>
     );
 };
 

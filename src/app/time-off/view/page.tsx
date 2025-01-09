@@ -30,6 +30,7 @@ export default function ViewTimeOffPage() {
   const [denyReason, setDenyReason] = useState('');
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflicts, setConflicts] = useState<ScheduleConflict[]>([]);
+  const [userCrew, setUserCrew] = useState<Crew | null>(null);
 
   const isHeadSetter = useMemo(() => 
     userDetails?.role === 'head_setter',
@@ -59,41 +60,52 @@ export default function ViewTimeOffPage() {
     let mounted = true;
 
     const loadData = async () => {
-      if (!user?.id) return;
-      
-      try {
-        const details = await dataManager.fetchUserDetails(user.id);
-        if (!mounted) return;
+        if (!user?.id) return;
         
-        setUserDetails(details);
-        
-        const fetchedRequests = await dataManager.fetchTimeOffRequests(
-          details?.role === 'head_setter' ? undefined : user.id
-        );
-        
-        if (!mounted) return;
+        try {
+            const details = await dataManager.fetchUserDetails(user.id);
+            if (!mounted) return;
+            
+            setUserDetails(details);
 
-        setRequests({
-          pending: fetchedRequests.filter(r => r.status === 'pending'),
-          approved: fetchedRequests.filter(r => r.status === 'approved'),
-          denied: fetchedRequests.filter(r => r.status === 'denied'),
-        });
-      } catch (error) {
-        if (mounted) setError(error instanceof Error ? error.message : 'An unknown error occurred');
-      } finally {
-        if (mounted) setLoading(false);
-      }
+            // If user is a head setter, fetch their crew
+            if (details?.role === 'head_setter') {
+                const crews = await dataManager.fetchCrews();
+                const userCrew = crews.find(crew => crew.head_setter_id === user.id);
+                if (mounted && userCrew) {
+                    setUserCrew(userCrew);
+                }
+            }
+            
+            const fetchedRequests = await dataManager.fetchTimeOffRequests(
+                user.id
+            );
+            
+            if (!mounted) return;
+
+            setRequests({
+                pending: fetchedRequests.filter(r => r.status === 'pending'),
+                approved: fetchedRequests.filter(r => r.status === 'approved'),
+                denied: fetchedRequests.filter(r => r.status === 'denied'),
+            });
+        } catch (error) {
+            if (mounted) {
+                setError(error instanceof Error ? error.message : 'An unknown error occurred');
+            }
+        } finally {
+            if (mounted) setLoading(false);
+        }
     };
 
     if (user) {
-      setLoading(true);
-      loadData();
+        setLoading(true);
+        loadData();
     }
 
     return () => {
-      mounted = false;
+        mounted = false;
     };
-  }, [user?.id]);
+}, [user?.id]);
 
   const approveRequest = async (request: TimeOffRequest) => {
     if (!user?.id) return;

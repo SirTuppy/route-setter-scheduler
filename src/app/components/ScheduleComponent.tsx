@@ -9,6 +9,16 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { dataManager, Gym, Wall, User } from './DataManager';
 import { useAuth } from '@/providers/auth-provider';
 import { getStandardizedDateKey, getDateForDatabase, createStandardizedDate, getMondayOfWeek } from '../utils/dateUtils';
+import RealtimeManager from './RealtimeManager';
+import { Button } from '@/components/ui/button'; 
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+  } from "@/components/ui/dialog";
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
@@ -22,6 +32,9 @@ const ScheduleContent: React.FC = () => {
     const { user } = useAuth();
     const [userDetails, setUserDetails] = useState<User | null>(null);
     const [hiddenGyms, setHiddenGyms] = useState<Set<string>>(new Set());
+    const [confirmationOpen, setConfirmationOpen] = useState(false);
+    const [weekToDelete, setWeekToDelete] = useState<Date[]>([]);
+    const [gymToDelete, setGymToDelete] = useState<string | null>(null);
 
     useEffect(() => {
         const loadUserDetails = async () => {
@@ -208,72 +221,175 @@ const ScheduleContent: React.FC = () => {
     };
 
     return (
-      <Card className="w-full bg-slate-900 border-slate-800">
+        <Card className="w-full bg-slate-900 border-slate-800">
           <CardContent className="p-6">
-              <ScheduleHeader
-                  currentDate={currentDate}
-                  onDateChange={setCurrentDate}
-                  datePickerOpen={datePickerOpen}
-                  setDatePickerOpen={setDatePickerOpen}
-              />
-
-              <GymFilter
-                  gymGroups={gymGroups}
-                  hiddenGyms={hiddenGyms}
-                  onToggleGym={toggleGym}
-              />
-
-              {/* Add an outer div for scrolling */}
-              <div className="overflow-x-auto">
-                  {/* Set fixed width columns using min-w classes */}
-                  <div className="grid" style={{
-                      gridTemplateColumns: '125px repeat(10, minmax(250px, 250px))',
-                      minWidth: 'fit-content',
-                      gap: '0.5rem'
-                  }}>
-                      <div className="font-bold text-slate-200">Gym</div>
-                      {/* Rest of your grid content remains the same */}
-                      {dates.map(date => (
-                          <div key={date.toString()} className="text-center">
-                              <div className="font-bold text-slate-200">{WEEK_DAYS[date.getDay() - 1]}</div>
-                              <div className="text-slate-400">{formatDate(date)}</div>
-                          </div>
-                      ))}
-
-                      {/* Your existing gym rows code */}
-                       {Object.entries(gymGroups).flatMap(([groupId, group]) =>
-                          Object.entries(group.gyms)
-                              .filter(([gymId]) => !hiddenGyms.has(gymId))
-                              .map(([gymId, gym]) => {
-                                  return dates.map(date => {
-                                      const dateKey = new Date(date.toISOString().split('T')[0] + 'T06:00:00.000Z').toISOString();
-                                      const gymKey = `${gymId}-${dateKey}`;
-                                      return (
-                                          <React.Fragment key={`${gymId}-${date.toString()}`}>
-                                              {date === dates[0] && (
-                                                  <div className={`${group.color} p-2 font-medium rounded-md ${group.border} text-slate-200`}>
-                                                      {gym.name}
-                                                  </div>
-                                              )}
-                                              <ScheduleCell
-                                                  gym={gymId}
-                                                  walls={gym.walls}
-                                                  setters={setters}
-                                                  date={date}
-                                                  scheduleData={scheduleData}
-                                                  updateData={setScheduleData}
-                                                  groupColor={group.color}
-                                              />
-                                          </React.Fragment>
-                                      );
-                                  });
-                              })
-                      )}
+            <RealtimeManager
+              onScheduleUpdate={setScheduleData}
+              startDate={dates[0]}
+              endDate={dates[dates.length - 1]}
+            />
+            <ScheduleHeader
+              currentDate={currentDate}
+              onDateChange={setCurrentDate}
+              datePickerOpen={datePickerOpen}
+              setDatePickerOpen={setDatePickerOpen}
+            />
+      
+            <GymFilter
+              gymGroups={gymGroups}
+              hiddenGyms={hiddenGyms}
+              onToggleGym={toggleGym}
+            />
+      
+            {/* Add an outer div for scrolling */}
+            <div className="overflow-x-auto">
+              {/* Set fixed width columns using min-w classes */}
+              <div className="grid" style={{
+                gridTemplateColumns: '125px repeat(10, minmax(250px, 250px))',
+                minWidth: 'fit-content',
+                gap: '0.5rem'
+              }}>
+                <div className="font-bold text-slate-200">Gym</div>
+                {dates.map(date => (
+                  <div key={date.toString()} className="text-center">
+                    <div className="font-bold text-slate-200">{WEEK_DAYS[date.getDay() - 1]}</div>
+                    <div className="text-slate-400">{formatDate(date)}</div>
                   </div>
+                ))}
+      
+                {/* Your existing gym rows code */}
+                {Object.entries(gymGroups).flatMap(([groupId, group]) =>
+                  Object.entries(group.gyms)
+                    .filter(([gymId]) => !hiddenGyms.has(gymId))
+                    .map(([gymId, gym]) => {
+                      return dates.map(date => {
+                        const dateKey = new Date(date.toISOString().split('T')[0] + 'T06:00:00.000Z').toISOString();
+                        const gymKey = `${gymId}-${dateKey}`;
+                        return (
+                          <React.Fragment key={`${gymId}-${date.toString()}`}>
+                           {date === dates[0] && (
+  <div className={`${group.color} p-2 font-medium rounded-md ${group.border} text-slate-200`}>
+    <div className="flex flex-col gap-2">
+      <span>{gym.name}</span>
+      {userDetails?.role === 'head_setter' && (
+        <>
+          <Button
+  variant="outline"
+  size="sm"
+  onClick={() => {
+    // Split dates into two weeks
+    const firstWeek = dates.slice(0, 5);
+    const secondWeek = dates.slice(5, 10);
+
+    // Check if there are any entries in the first week
+    const hasFirstWeekEntries = firstWeek.some(weekDate => {
+        const dateKey = getStandardizedDateKey(weekDate);
+        const key = `${gymId}-${dateKey}`;
+        return scheduleData[key]?.id;
+    });
+    
+    // Store both the week and the gym ID
+    setGymToDelete(gymId);
+    setWeekToDelete(hasFirstWeekEntries ? firstWeek : secondWeek);
+    setConfirmationOpen(true);
+}}
+  className="w-full bg-slate-700 hover:bg-red-900 text-slate-200 border-slate-600"
+>
+  Clear week
+</Button>
+
+          <Dialog open={confirmationOpen} onOpenChange={setConfirmationOpen}>
+            <DialogContent className="bg-slate-800 border-slate-700">
+              <DialogHeader>
+                <DialogTitle className="text-slate-200">Confirm Clear Week</DialogTitle>
+                <DialogDescription className="text-slate-400">
+                  Are you sure you want to clear all schedule entries for {gym.name} from{' '}
+                  {weekToDelete[0] && formatDate(weekToDelete[0])} to{' '}
+                  {weekToDelete[4] && formatDate(weekToDelete[4])}?
+                  This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmationOpen(false)}
+                  className="bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={async () => {
+                    try {
+                        if (!gymToDelete) return;  // Safety check
+                        
+                        const weekEntries = weekToDelete
+                            .map(weekDate => {
+                                const dateKey = getStandardizedDateKey(weekDate);
+                                const key = `${gymToDelete}-${dateKey}`;  // Use gymToDelete here
+                                console.log('Looking for delete key:', key);
+                                console.log('Entry exists?', Boolean(scheduleData[key]?.id));
+                                return scheduleData[key]?.id;
+                            })
+                            .filter(id => id !== undefined);
+                        
+                        console.log('Entries to delete:', weekEntries);
+                
+                        if (weekEntries.length > 0) {
+                            await Promise.all(
+                                weekEntries.map(id => dataManager.deleteScheduleEntry(id))
+                            );
+                
+                            setScheduleData(prev => {
+                                const newData = { ...prev };
+                                weekToDelete.forEach(weekDate => {
+                                    const dateKey = getStandardizedDateKey(weekDate);
+                                    const key = `${gymToDelete}-${dateKey}`;  // Use gymToDelete here too
+                                    delete newData[key];
+                                });
+                                return newData;
+                            });
+                        }
+                        
+                        setConfirmationOpen(false);
+                    } catch (error) {
+                        console.error('Error clearing week:', error);
+                        throw error instanceof SchedulerError ? error : new SchedulerError(
+                            'Failed to clear week',
+                            ErrorCodes.DATA_UPDATE_ERROR
+                        );
+                    }
+                }}
+                  className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                >
+                  Clear Week
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
+    </div>
+  </div>
+)}
+                            <ScheduleCell
+                              gym={gymId}
+                              walls={gym.walls}
+                              setters={setters}
+                              date={date}
+                              scheduleData={scheduleData}
+                              updateData={setScheduleData}
+                              groupColor={group.color}
+                            />
+                          </React.Fragment>
+                        );
+                      });
+                    })
+                )}
               </div>
+            </div>
           </CardContent>
-      </Card>
-  );
+        </Card>
+      );
 };
 
 const ScheduleComponent: React.FC = () => {

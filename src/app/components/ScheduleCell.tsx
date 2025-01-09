@@ -7,6 +7,15 @@ import { dataManager } from './DataManager';
 import { getStandardizedDateKey, getDateForDatabase } from '../utils/dateUtils';
 import { useAuth } from '@/providers/auth-provider';
 import LiveCell from './LiveCell';
+import { Button}  from '../../components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+  } from "@/components/ui/dialog";
 
 interface Wall {
     id: string;
@@ -45,6 +54,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
     const dateKey = getStandardizedDateKey(date);
     const gymKey = `${gym}-${dateKey}`;
     const currentData = scheduleData[gymKey] || {};
+    const [clearDayDialogOpen, setClearDayDialogOpen] = useState(false);
 
     // Determine if user is head setter based on JWT claims
     const isHeadSetter = useMemo(() => {
@@ -188,6 +198,63 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
         >
             <div className={`${groupColor} border border-slate-700 rounded-md min-h-[200px]`}>
                 <div className="space-y-2 p-2">
+                {isHeadSetter && currentData.id && !isLocked && (
+  <>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => setClearDayDialogOpen(true)}
+      className="w-full mb-2 bg-slate-700 hover:bg-red-900 text-slate-200 border-slate-600"
+    >
+      Clear day
+    </Button>
+
+    <Dialog open={clearDayDialogOpen} onOpenChange={setClearDayDialogOpen}>
+      <DialogContent className="bg-slate-800 border-slate-700">
+        <DialogHeader>
+          <DialogTitle className="text-slate-200">Confirm Clear Day</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Are you sure you want to clear all schedule entries for {getGymName(gym)} on {formatDate(date)}?
+            This action cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setClearDayDialogOpen(false)}
+            className="bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={async () => {
+              if (currentData.id) {
+                try {
+                  await dataManager.deleteScheduleEntry(currentData.id);
+                  updateData(prev => {
+                    const newData = { ...prev };
+                    delete newData[gymKey];
+                    return newData;
+                  });
+                } catch (error) {
+                  console.error('Error clearing day:', error);
+                  throw error instanceof SchedulerError ? error : new SchedulerError(
+                    'Failed to clear day',
+                    ErrorCodes.DATA_UPDATE_ERROR
+                  );
+                }
+              }
+              setClearDayDialogOpen(false);
+            }}
+            className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+          >
+            Clear Day
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </>
+)}
                     {isLocked && !isHeadSetter && (
                         <div className="text-amber-500 text-sm mb-2">
                             This cell is being edited by another user
@@ -220,7 +287,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                             </div>
                         </>
                     )}
-
+    
                     <MultiSelect<User>
                         items={setters}
                         selectedIds={currentData.setters || []}
@@ -232,12 +299,12 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                         variant="outline"
                         size="sm"
                         className="w-full"
-                         disabled={!isHeadSetter || isLocked || conflictingSetters.reduce((acc, id) => ({
+                        disabled={!isHeadSetter || isLocked || conflictingSetters.reduce((acc, id) => ({
                             ...acc,
                             [id]: true
                         }), {})}
                     />
-
+    
                     <Input
                         className="bg-slate-800 text-slate-200 border-slate-700"
                         value={localComment}
@@ -255,7 +322,10 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
         </LiveCell>
     );
 };
-
+const formatDate = (date: Date): string => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[date.getMonth()]} ${date.getDate()}`;
+};
 const getGymName = (gym: string): string => {
     const gymNames: Record<string, string> = {
         design: 'Design District',

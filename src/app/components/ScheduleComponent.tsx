@@ -24,7 +24,6 @@ const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 const ScheduleContent: React.FC = () => {
     const [currentDate, setCurrentDate] = useState(() => getMondayOfWeek());
-    const [datePickerOpen, setDatePickerOpen] = useState(false);
     const [scheduleData, setScheduleData] = useState<Record<string, any>>({});
     const [gymGroups, setGymGroups] = useState<Record<string, any>>({});
     const [setters, setSetters] = useState<User[]>([]);
@@ -232,8 +231,6 @@ console.log('Received entries:', entries);
             <ScheduleHeader
                 currentDate={currentDate}
                 onDateChange={setCurrentDate}
-                datePickerOpen={datePickerOpen}
-                setDatePickerOpen={setDatePickerOpen}
             />
 
             <GymFilter

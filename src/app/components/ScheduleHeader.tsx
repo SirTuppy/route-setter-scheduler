@@ -2,12 +2,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { SubmitTimeOffButton } from './SubmitTimeOffButton';
 import { ViewTimeOffButton } from './ViewTimeOffButton';
 import { WallEditorButton } from './WallEditorButton';
@@ -15,35 +9,17 @@ import { YellowPageButton } from './YellowPageButton';
 import { MyScheduleButton } from './myScheduleButton';
 import { CrewEditorButton } from './CrewEditorButton';
 import UserMenu from './UserMenu';
-import { CalendarIcon } from '@radix-ui/react-icons';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
 
 interface ScheduleHeaderProps {
     currentDate: Date;
     onDateChange: (date: Date) => void;
-    datePickerOpen: boolean;
-    setDatePickerOpen: (open: boolean) => void;
 }
 
 const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
   currentDate,
   onDateChange,
-  datePickerOpen,
-  setDatePickerOpen
 }) => {
-  const handleDateSelect = (date: Date | undefined) => {
-    if (date) {
-      // Create a new Date object to avoid mutating the input
-      const selectedDate = new Date(date);
-      // If not Monday, find the next Monday
-      while (selectedDate.getDay() !== 1) {
-        selectedDate.setDate(selectedDate.getDate() + 1);
-      }
-      onDateChange(selectedDate);
-      setDatePickerOpen(false);
-    }
-  };
 
   const adjustDate = (weeks: number) => {
     const newDate = new Date(currentDate);

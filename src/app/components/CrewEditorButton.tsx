@@ -1,12 +1,12 @@
-// components/YellowPageButton.tsx
+// components/CrewEditorButton.tsx
 'use client';
 
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { usePermissions } from '../hooks/usePermissions';
-import { FileText } from 'lucide-react'; // Import the icon
+import { Users } from 'lucide-react';
 
-export const YellowPageButton = () => {
+export const CrewEditorButton = () => {
   const router = useRouter();
   const { isHeadSetter } = usePermissions();
 
@@ -15,11 +15,11 @@ export const YellowPageButton = () => {
   return (
     <Button
       variant="outline"
-      className="border-slate-700 hover:bg-amber-600 text-slate-200 bg-amber-600 gap-2"
-      onClick={() => router.push('/yellow-page')}
+      className="border-slate-700 hover:bg-pink-800 text-slate-200 bg-pink-700 gap-2"
+      onClick={() => router.push('/crew-editor')}
     >
-       <FileText size={16} />
-      Yellow Page Exporter
+      <Users size={16} />
+      Crew Editor
     </Button>
   );
 };

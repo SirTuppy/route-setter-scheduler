@@ -36,25 +36,25 @@ export default function ViewTimeOffPage() {
     userDetails?.role === 'head_setter',
     [userDetails?.role]
   );
-  console.log('userDetails:', userDetails);
+  //console.log('userDetails:', userDetails);
 
-  const refetchData = async () => {
-    if (!user?.id) return;
+    const refetchData = async (userId?:string) => {
+      if (!user?.id) return;
 
-    try {
-      const fetchedRequests = await dataManager.fetchTimeOffRequests(
-        isHeadSetter ? undefined : user.id
-      );
+      try {
+        const fetchedRequests = await dataManager.fetchTimeOffRequests(
+          isHeadSetter ? undefined : userId || user.id
+        );
 
-      setRequests({
-        pending: fetchedRequests.filter(r => r.status === 'pending'),
-        approved: fetchedRequests.filter(r => r.status === 'approved'),
-        denied: fetchedRequests.filter(r => r.status === 'denied'),
-      });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
-    }
-  };
+        setRequests({
+          pending: fetchedRequests.filter(r => r.status === 'pending'),
+          approved: fetchedRequests.filter(r => r.status === 'approved'),
+          denied: fetchedRequests.filter(r => r.status === 'denied'),
+        });
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'An unknown error occurred');
+      }
+    };
 
   useEffect(() => {
     let mounted = true;
@@ -77,17 +77,7 @@ export default function ViewTimeOffPage() {
                 }
             }
             
-            const fetchedRequests = await dataManager.fetchTimeOffRequests(
-                user.id
-            );
-            
-            if (!mounted) return;
-
-            setRequests({
-                pending: fetchedRequests.filter(r => r.status === 'pending'),
-                approved: fetchedRequests.filter(r => r.status === 'approved'),
-                denied: fetchedRequests.filter(r => r.status === 'denied'),
-            });
+          await refetchData();
         } catch (error) {
             if (mounted) {
                 setError(error instanceof Error ? error.message : 'An unknown error occurred');
@@ -107,21 +97,21 @@ export default function ViewTimeOffPage() {
     };
 }, [user?.id]);
 
-  const approveRequest = async (request: TimeOffRequest) => {
-    if (!user?.id) return;
+    const approveRequest = async (request: TimeOffRequest) => {
+      if (!user?.id) return;
 
-    try {
-      await dataManager.updateTimeOffRequest(
-        request.id,
-        'approved',
-        user.id
-      );
-      await refetchData();
-      setError(null);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
-    }
-  };
+      try {
+        await dataManager.updateTimeOffRequest(
+          request.id,
+          'approved',
+          user.id
+        );
+          await refetchData(user.id);
+        setError(null);
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'An unknown error occurred');
+      }
+    };
 
   const handleApprove = async (request: TimeOffRequest) => {
     if (!user?.id) return;
@@ -159,26 +149,26 @@ export default function ViewTimeOffPage() {
     }
   };
 
-  const handleDeny = async () => {
-    if (!selectedRequest || !denyReason || !user?.id) return;
+    const handleDeny = async () => {
+        if (!selectedRequest || !denyReason || !user?.id) return;
 
-    try {
-      await dataManager.updateTimeOffRequest(
-        selectedRequest.id,
-        'denied',
-        user.id,
-        denyReason
-      );
+        try {
+            await dataManager.updateTimeOffRequest(
+                selectedRequest.id,
+                'denied',
+                user.id,
+                denyReason
+            );
 
-      await refetchData();
-      setShowDenyDialog(false);
-      setDenyReason('');
-      setSelectedRequest(null);
-      setError(null);
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
-    }
-  };
+            await refetchData(user.id);
+            setShowDenyDialog(false);
+            setDenyReason('');
+            setSelectedRequest(null);
+            setError(null);
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'An unknown error occurred');
+        }
+    };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -228,7 +218,7 @@ export default function ViewTimeOffPage() {
                         <span className="text-slate-400">Reason: </span>
                         {request.reason}
                       </p>
-                      {status === 'denied' && (
+                       {status === 'denied' && (
                         <p className="text-sm text-red-400 mt-1">
                           <span className="text-slate-400">Denial Reason: </span>
                           {request.reason}
@@ -250,8 +240,8 @@ export default function ViewTimeOffPage() {
                             setSelectedRequest(request);
                             setShowDenyDialog(true);
                           }}
-                          className="bg-red-600 hover:bg-red-700 text-white text-sm py-1 h-8"
-                          size="default"
+                           className="bg-red-600 hover:bg-red-700 text-white text-sm py-1 h-8"
+                            size="default"
                         >
                           Deny
                         </Button>

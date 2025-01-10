@@ -202,7 +202,7 @@ export default function WallEditor() {
                 </>
               ) : (
                 <>
-                  <td className="p-2">{wall.name}</td>
+                  <td className="p-2 truncate overflow-hidden whitespace-nowrap max-w-[150px]">{wall.name}</td>
                   <td className="p-2">{wall.wall_type}</td>
                   <td className="p-2">{wall.angle || '-'}</td>
                   <td className="p-2">{wall.difficulty}</td>
@@ -227,8 +227,12 @@ export default function WallEditor() {
 
   const GymContent = ({ gymId, gymWalls }: { gymId: string, gymWalls: { boulder: Wall[], rope: Wall[] } }) => {
     const hasRopeWalls = gymWalls.rope.length > 0;
+    const hasBoulderWalls = gymWalls.boulder.length > 0;
 
-    if (hasRopeWalls) {
+
+    const showCollapsibles = hasRopeWalls || (['denton', 'hill', 'fortWorth', 'carrolltonTC', 'planoTC'].includes(gymId) && hasBoulderWalls);
+
+    if(showCollapsibles){
       return (
         <>
           {['boulder', 'rope'].map(type => {
@@ -262,11 +266,11 @@ export default function WallEditor() {
       );
     }
 
-    return (
-      <div className="ml-6">
-        <WallTable walls={sortWallsByName(gymWalls.boulder)} gymId={gymId} />
-      </div>
-    );
+     return (
+          <div className="ml-6">
+            <WallTable walls={sortWallsByName(gymWalls.boulder)} gymId={gymId} />
+          </div>
+        );
   };
 
   const GymGrid = () => {
@@ -280,7 +284,7 @@ export default function WallEditor() {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {gymPairs.map(([gym1Id, gym2Id], index) => (
-          <div key={index} className="flex flex-col lg:flex-row gap-6">
+          <div key={index} className="flex flex-col lg:flex-row gap-6 pt-6">
             {gym1Id && filteredWalls[gym1Id] && (
               <div className="flex-1">
                 <Collapsible
@@ -292,7 +296,7 @@ export default function WallEditor() {
                     {expandedGyms[gym1Id] ? <ChevronDown className="h-5 w-5 mr-2" /> : <ChevronRight className="h-5 w-5 mr-2" />}
                     {GYM_NAMES[gym1Id]}
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4">
+                  <CollapsibleContent className="space-y-4 mt-2">
                     <GymContent gymId={gym1Id} gymWalls={filteredWalls[gym1Id]} />
                   </CollapsibleContent>
                 </Collapsible>
@@ -310,7 +314,7 @@ export default function WallEditor() {
                     {expandedGyms[gym2Id] ? <ChevronDown className="h-5 w-5 mr-2" /> : <ChevronRight className="h-5 w-5 mr-2" />}
                     {GYM_NAMES[gym2Id]}
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4">
+                  <CollapsibleContent className="space-y-4 mt-2">
                     <GymContent gymId={gym2Id} gymWalls={filteredWalls[gym2Id]} />
                   </CollapsibleContent>
                 </Collapsible>

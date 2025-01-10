@@ -88,6 +88,7 @@ class DataManager {
           //console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
         }
   // Gym Operations
+  
   async fetchGyms(): Promise<Gym[]> {
     try {
         const { data, error } = await this.supabase
@@ -180,15 +181,17 @@ async fetchUserDetails(userId: string): Promise<User | null> {
   // Schedule Operations
   async fetchScheduleEntries(startDate: string, endDate: string): Promise<ScheduleEntry[]> {
     try {
-      const { data: entries, error: entriesError } = await this.supabase
-        .from('schedule_entries')
-        .select(`
-          *,
-          schedule_entry_walls(wall_id),
-          schedule_setters(user_id)
-        `)
-        .gte('schedule_date', startDate)
-        .lte('schedule_date', endDate);
+      console.log('Database query dates:', startDate, endDate);
+const { data: entries, error: entriesError } = await this.supabase
+  .from('schedule_entries')
+  .select(`
+    *,
+    schedule_entry_walls(wall_id),
+    schedule_setters(user_id)
+  `)
+  .gte('schedule_date', startDate)
+  .lte('schedule_date', endDate);
+console.log('Raw database response:', entries);
         
       if (entriesError) {
         console.error('Error fetching schedule entries:', entriesError);
@@ -552,105 +555,123 @@ async fetchUserDetails(userId: string): Promise<User | null> {
     }
 }
 
-async fetchCrews(): Promise<Crew[]> {
+async fetchTimeOffRequests(userId?: string): Promise<TimeOffRequest[]> {
   try {
+    if (!userId) {
+      // Admin view - return all requests
       const { data, error } = await this.supabase
-          .from('crews')
-          .select(`
-              *,
-              users!crews_head_setter_id_fkey (
-                  name,
-                  email
-              )
-          `);
+        .from('time_off')
+        .select(`
+          *,
+          users!time_off_user_id_fkey (
+            name,
+            email,
+            role
+          )
+        `)
+        .order('start_date', { ascending: false });
 
       if (error) throw error;
       return data;
+    }
+
+    // Get user details including role
+    const userDetails = await this.fetchUserDetails(userId);
+    if (!userDetails) throw new Error("User not found");
+    
+    if (userDetails?.role !== 'head_setter') {
+      // Regular setter - only see their own requests
+      const { data, error } = await this.supabase
+        .from('time_off')
+        .select(`
+          *,
+          users!time_off_user_id_fkey (
+            name,
+            email,
+            role
+          )
+        `)
+        .eq('user_id', userId)
+        .order('start_date', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    }
+
+    // Fetch all users first
+    const { data: allUsers, error: usersError } = await this.supabase
+      .from('users')
+      .select('*');
+    
+    if (usersError) throw usersError;
+
+    // For head setters, get all crews they're involved with
+    const { data: crews } = await this.supabase
+      .from('crews')
+      .select('id')
+      .eq('head_setter_id', userId);
+
+    // For assistant head setters (M2s), also get crews where the main head setter is their partner
+    const headSetterPairs = {
+      'Evan': 'Luke S.',
+      'Canon': 'Jack S.',
+      'Austin': 'Nicole'
+    };
+
+    // Get partner's name (whether they're head or assistant)
+    const userNameToId = Object.fromEntries(allUsers.map(u => [u.name, u.id]));
+    const userName = userDetails.name;
+    let partnerName = null;
+
+    // Find if they're a head setter or assistant
+    for (const [head, assistant] of Object.entries(headSetterPairs)) {
+      if (head === userName) partnerName = assistant;
+      if (assistant === userName) partnerName = head;
+    }
+
+    if (partnerName) {
+      const partnerId = userNameToId[partnerName];
+      const { data: partnerCrews } = await this.supabase
+        .from('crews')
+        .select('id')
+        .eq('head_setter_id', partnerId);
+      
+      if (partnerCrews) crews.push(...partnerCrews);
+    }
+
+    // Get all users in any of these crews
+    const { data: crewUsers } = await this.supabase
+      .from('user_crews')
+      .select('user_id')
+      .in('crew_id', crews.map(c => c.id));
+
+    // Get all unique user IDs (including both head setters)
+    const relevantUserIds = [...new Set([
+      userId, 
+      userNameToId[partnerName],
+      ...(crewUsers?.map(u => u.user_id) || [])
+    ])].filter(Boolean);
+
+    // Get time off requests for all relevant users
+    const { data: timeOffRequests, error } = await this.supabase
+      .from('time_off')
+      .select(`
+        *,
+        users!time_off_user_id_fkey (
+          name,
+          email,
+          role
+        )
+      `)
+      .in('user_id', relevantUserIds)
+      .order('start_date', { ascending: false });
+
+    if (error) throw error;
+    return timeOffRequests;
+
   } catch (error) {
-      console.error('Error fetching crews:', error);
-      throw new SchedulerError('Failed to fetch crews', ErrorCodes.DATA_FETCH_ERROR);
-  }
-}
-
-async fetchTimeOffRequests(userId?: string, status?: string): Promise<TimeOffRequest[]> {
-  try {
-      if (userId) {
-          const userDetails = await this.fetchUserDetails(userId);
-          
-          if (userDetails?.role === 'head_setter') {
-              // First, get the crews where this user is head setter
-              const { data: crews, error: crewsError } = await this.supabase
-                  .from('crews')
-                  .select('id')
-                  .eq('head_setter_id', userId);
-
-              if (crewsError) throw crewsError;
-
-              // Then get all users in those crews
-              const crewIds = crews.map(crew => crew.id);
-              const { data: crewUsers, error: usersError } = await this.supabase
-                  .from('user_crews')
-                  .select('user_id')
-                  .in('crew_id', crewIds);
-
-              if (usersError) throw usersError;
-
-              // Now get all time off requests for these users
-              const userIds = [...new Set([userId, ...crewUsers.map(u => u.user_id)])];
-              
-              const { data, error } = await this.supabase
-                  .from('time_off')
-                  .select(`
-                      *,
-                      users!time_off_user_id_fkey (
-                          name,
-                          email,
-                          role
-                      )
-                  `)
-                  .in('user_id', userIds)
-                  .order('start_date', { ascending: false });
-
-              if (error) throw error;
-              return data;
-          } else {
-              // Regular setter only sees their own requests
-              const { data, error } = await this.supabase
-                  .from('time_off')
-                  .select(`
-                      *,
-                      users!time_off_user_id_fkey (
-                          name,
-                          email,
-                          role
-                      )
-                  `)
-                  .eq('user_id', userId)
-                  .order('start_date', { ascending: false });
-
-              if (error) throw error;
-              return data;
-          }
-      } else {
-          // No userId provided, return all requests (for admin purposes)
-          const { data, error } = await this.supabase
-              .from('time_off')
-              .select(`
-                  *,
-                  users!time_off_user_id_fkey (
-                      name,
-                      email,
-                      role
-                  )
-              `)
-              .order('start_date', { ascending: false });
-
-          if (error) throw error;
-          return data;
-      }
-  } catch (error) {
-      console.error('Error in fetchTimeOffRequests:', error);
-      throw new SchedulerError('Failed to fetch time off requests', ErrorCodes.DATA_FETCH_ERROR);
+    console.error('Error in fetchTimeOffRequests:', error);
+    throw new SchedulerError('Failed to fetch time off requests', ErrorCodes.DATA_FETCH_ERROR);
   }
 }
 
@@ -693,6 +714,84 @@ async checkTimeOffConflicts(userId: string, startDate: string, endDate: string):
       date: entry.schedule_date,
       gym: entry.gym_id
     }));
+}
+
+async fetchCrews(): Promise<Crew[]> {
+  try {
+    const { data, error } = await this.supabase
+      .from('crews')
+      .select(`
+        *,
+        head_setter:users!crews_head_setter_id_fkey (
+          name,
+          email
+        ),
+        users:user_crews (
+          user:users (
+            id,
+            name,
+            email,
+            role
+          )
+        )
+      `);
+
+    if (error) throw error;
+
+    // Transform the nested data structure
+    return data.map(crew => ({
+      ...crew,
+      users: crew.users?.map(u => u.user)
+    }));
+  } catch (error) {
+    console.error('Error fetching crews:', error);
+    throw new SchedulerError('Failed to fetch crews', ErrorCodes.DATA_FETCH_ERROR);
+  }
+}
+
+async addCrewMember(crewId: string, userId: string): Promise<void> {
+  try {
+    const { error } = await this.supabase
+      .from('user_crews')
+      .insert({
+        crew_id: crewId,
+        user_id: userId
+      });
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error adding crew member:', error);
+    throw new SchedulerError('Failed to add crew member', ErrorCodes.DATA_UPDATE_ERROR);
+  }
+}
+
+async removeCrewMember(crewId: string, userId: string): Promise<void> {
+  try {
+    const { error } = await this.supabase
+      .from('user_crews')
+      .delete()
+      .eq('crew_id', crewId)
+      .eq('user_id', userId);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error removing crew member:', error);
+    throw new SchedulerError('Failed to remove crew member', ErrorCodes.DATA_UPDATE_ERROR);
+  }
+}
+
+async updateCrewHeadSetter(crewId: string, headSetterId: string): Promise<void> {
+  try {
+    const { error } = await this.supabase
+      .from('crews')
+      .update({ head_setter_id: headSetterId })
+      .eq('id', crewId);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error updating crew head setter:', error);
+    throw new SchedulerError('Failed to update crew head setter', ErrorCodes.DATA_UPDATE_ERROR);
+  }
 }
 
 async updateWall(wall: Wall) {

@@ -16,6 +16,7 @@ import {
     DialogHeader,
     DialogTitle,
   } from "@/components/ui/dialog";
+  import { Trash2 } from 'lucide-react';
 
 interface Wall {
     id: string;
@@ -196,65 +197,8 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
             onLockedStateChange={setIsLocked}
             isActive={isActive}
         >
-            <div className={`${groupColor} border border-slate-700 rounded-md min-h-[200px]`}>
+            <div className={`${groupColor} border border-slate-700 rounded-md min-h-[200px] relative group`}>
                 <div className="space-y-2 p-2">
-                {isHeadSetter && currentData.id && !isLocked && (
-  <>
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => setClearDayDialogOpen(true)}
-      className="w-full mb-2 bg-slate-700 hover:bg-red-900 text-slate-200 border-slate-600"
-    >
-      Clear day
-    </Button>
-
-    <Dialog open={clearDayDialogOpen} onOpenChange={setClearDayDialogOpen}>
-      <DialogContent className="bg-slate-800 border-slate-700">
-        <DialogHeader>
-          <DialogTitle className="text-slate-200">Confirm Clear Day</DialogTitle>
-          <DialogDescription className="text-slate-400">
-            Are you sure you want to clear all schedule entries for {getGymName(gym)} on {formatDate(date)}?
-            This action cannot be undone.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setClearDayDialogOpen(false)}
-            className="bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={async () => {
-              if (currentData.id) {
-                try {
-                  await dataManager.deleteScheduleEntry(currentData.id);
-                  updateData(prev => {
-                    const newData = { ...prev };
-                    delete newData[gymKey];
-                    return newData;
-                  });
-                } catch (error) {
-                  console.error('Error clearing day:', error);
-                  throw error instanceof SchedulerError ? error : new SchedulerError(
-                    'Failed to clear day',
-                    ErrorCodes.DATA_UPDATE_ERROR
-                  );
-                }
-              }
-              setClearDayDialogOpen(false);
-            }}
-            className="bg-red-600 hover:bg-red-700 text-white border-red-600"
-          >
-            Clear Day
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  </>
-)}
                     {isLocked && !isHeadSetter && (
                         <div className="text-amber-500 text-sm mb-2">
                             This cell is being edited by another user
@@ -263,19 +207,31 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                     
                     {gym !== 'vacation' && (
                         <>
-                            <MultiSelect<Wall>
-                                items={walls}
-                                selectedIds={currentData.walls || []}
-                                onChange={wallIds => updateLocalData('walls', wallIds)}
-                                getDisplayValue={getWallDisplayValue}
-                                getId={getWallId}
-                                groupBy={(wall) => wall.wall_type === 'boulder' ? 'Boulder Walls' : 'Rope Walls'}
-                                placeholder={isHeadSetter ? "Select walls" : "Walls (view only)"}
-                                variant="outline"
-                                size="sm"
-                                className="w-full"
-                                disabled={!isHeadSetter || isLocked}
-                            />
+                            <div className="flex items-center gap-2">
+                                <MultiSelect<Wall>
+                                    items={walls}
+                                    selectedIds={currentData.walls || []}
+                                    onChange={wallIds => updateLocalData('walls', wallIds)}
+                                    getDisplayValue={getWallDisplayValue}
+                                    getId={getWallId}
+                                    groupBy={(wall) => wall.wall_type === 'boulder' ? 'Boulder Walls' : 'Rope Walls'}
+                                    placeholder={isHeadSetter ? "Select walls" : "Walls (view only)"}
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    disabled={!isHeadSetter || isLocked}
+                                />
+                                {isHeadSetter && currentData.id && !isLocked && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => setClearDayDialogOpen(true)}
+                                        className="bg-slate-700/50 hover:bg-red-900/50 text-slate-200 h-8 w-8 shrink-0 flex-none"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="p-2 bg-slate-700 rounded text-slate-200"
                                     style={{ backgroundColor: getDifficultyColor(metrics.difficulty) }}>
@@ -319,6 +275,52 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                     />             
                 </div>
             </div>
+    
+            <Dialog open={clearDayDialogOpen} onOpenChange={setClearDayDialogOpen}>
+                <DialogContent className="bg-slate-800 border-slate-700">
+                    <DialogHeader>
+                        <DialogTitle className="text-slate-200">Confirm Clear Day</DialogTitle>
+                        <DialogDescription className="text-slate-400">
+                            Are you sure you want to clear all schedule entries for {getGymName(gym)} on {formatDate(date)}?
+                            This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setClearDayDialogOpen(false)}
+                            className="bg-slate-700 hover:bg-slate-600 text-slate-200 border-slate-600"
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={async () => {
+                                if (currentData.id) {
+                                    try {
+                                        await dataManager.deleteScheduleEntry(currentData.id);
+                                        updateData(prev => {
+                                            const newData = { ...prev };
+                                            delete newData[gymKey];
+                                            return newData;
+                                        });
+                                    } catch (error) {
+                                        console.error('Error clearing day:', error);
+                                        throw error instanceof SchedulerError ? error : new SchedulerError(
+                                            'Failed to clear day',
+                                            ErrorCodes.DATA_UPDATE_ERROR
+                                        );
+                                    }
+                                }
+                                setClearDayDialogOpen(false);
+                            }}
+                            className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                        >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Clear Day
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </LiveCell>
     );
 };

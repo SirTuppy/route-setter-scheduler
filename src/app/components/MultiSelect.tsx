@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { SchedulerError, ErrorCodes } from '../errors/types';
 
 interface MultiSelectProps<T> {
   items: T[];
   selectedIds: string[];
   onChange: (ids: string[]) => void;
   getDisplayValue: (item: T) => string;
-  getId: (item: T) => string;
+    getId: (item: T) => string;
+    isHeadSetter?: (item: T) => boolean
   placeholder: string;
   disabled?: Record<string, boolean>;
   variant?: 'default' | 'secondary' | 'outline' | 'ghost';
@@ -23,7 +23,8 @@ const MultiSelect = <T extends any>({
   selectedIds,
   onChange,
   getDisplayValue,
-  getId,
+    getId,
+    isHeadSetter,
   placeholder,
   disabled,
   variant = 'outline',
@@ -71,6 +72,15 @@ const [activeGroup, setActiveGroup] = useState(() => {
     items.filter(item => selectedIds.includes(getId(item))),
     [items, selectedIds, getId]
   );
+    
+  const sortedSelectedItems = useMemo(() => {
+        if(groups.length > 1 && !activeGroup.includes('Crew')){
+            return [...selectedItems].sort((a,b) => getDisplayValue(a).localeCompare(getDisplayValue(b)))
+        }
+        const headSetters = selectedItems.filter(item => isHeadSetter?.(item));
+        const normalSetters = selectedItems.filter(item => !isHeadSetter?.(item)).sort((a,b) => getDisplayValue(a).localeCompare(getDisplayValue(b)))
+    return [...headSetters, ...normalSetters];
+}, [selectedItems, getDisplayValue, isHeadSetter, activeGroup, groups]);
 
   useEffect(() => {
     if (!activeGroup && groups.length > 0) {
@@ -95,32 +105,67 @@ const [activeGroup, setActiveGroup] = useState(() => {
       : [...selectedIds, id];
     onChange(newIds);
   };
-
-
+    
     const sortItems = (itemsToSort: T[]) => {
-    return [...itemsToSort].sort((a, b) => {
-          const aValue = getDisplayValue(a);
-          const bValue = getDisplayValue(b);
+        if (activeGroup && !activeGroup.includes('Crew')) {
+            return [...itemsToSort].sort((a, b) => {
+                const aValue = getDisplayValue(a);
+                const bValue = getDisplayValue(b);
 
-        const aMatch = aValue.match(/(\D+)(\d+)?/);
-        const bMatch = bValue.match(/(\D+)(\d+)?/);
+                const aMatch = aValue.match(/(\D+)(\d+)?/);
+                const bMatch = bValue.match(/(\D+)(\d+)?/);
 
-          if (aMatch && bMatch) {
-            const aPrefix = aMatch[1] || '';
-            const bPrefix = bMatch[1] || '';
-            const aNum = parseInt(aMatch[2] || '0', 10);
-            const bNum = parseInt(bMatch[2] || '0', 10);
+                if (aMatch && bMatch) {
+                    const aPrefix = aMatch[1] || '';
+                    const bPrefix = bMatch[1] || '';
+                    const aNum = parseInt(aMatch[2] || '0', 10);
+                    const bNum = parseInt(bMatch[2] || '0', 10);
 
 
-            if (aPrefix < bPrefix) return -1;
-            if (aPrefix > bPrefix) return 1;
+                    if (aPrefix < bPrefix) return -1;
+                    if (aPrefix > bPrefix) return 1;
 
-            return aNum - bNum;
-          }
-        
-        return aValue.localeCompare(bValue)
-      });
+                    return aNum - bNum;
+                }
+
+                return aValue.localeCompare(bValue)
+            });
+        }
+        return [...itemsToSort].sort((a, b) => {
+            const aIsHeadSetter = isHeadSetter?.(a) ?? false;
+            const bIsHeadSetter = isHeadSetter?.(b) ?? false;
+
+            // Prioritize head setters
+            if (aIsHeadSetter && !bIsHeadSetter) {
+                return -1;
+            }
+            if (!aIsHeadSetter && bIsHeadSetter) {
+                return 1;
+            }
+
+            const aValue = getDisplayValue(a);
+            const bValue = getDisplayValue(b);
+
+            const aMatch = aValue.match(/(\D+)(\d+)?/);
+            const bMatch = bValue.match(/(\D+)(\d+)?/);
+
+            if (aMatch && bMatch) {
+                const aPrefix = aMatch[1] || '';
+                const bPrefix = bMatch[1] || '';
+                const aNum = parseInt(aMatch[2] || '0', 10);
+                const bNum = parseInt(bMatch[2] || '0', 10);
+
+
+                if (aPrefix < bPrefix) return -1;
+                if (aPrefix > bPrefix) return 1;
+
+                return aNum - bNum;
+            }
+
+            return aValue.localeCompare(bValue)
+        });
     };
+
 
   return (
     <div className={cn("relative", className)} ref={wrapperRef}>
@@ -128,7 +173,7 @@ const [activeGroup, setActiveGroup] = useState(() => {
         className={`border border-slate-700 p-2 min-h-[2.5rem] ${isFullyDisabled ? 'cursor-not-allowed bg-slate-700' : 'cursor-pointer bg-slate-800'} rounded-md text-slate-200`}
         onClick={() => !isFullyDisabled && setIsOpen(!isOpen)}
       >
-        {selectedItems.length ? selectedItems.map(getDisplayValue).join(', ') : placeholder}
+        {sortedSelectedItems.length ? sortedSelectedItems.map(getDisplayValue).join(', ') : placeholder}
       </div>
       {!isFullyDisabled && isOpen && (
         <div className="absolute z-50 w-full mt-1 bg-slate-800 border border-slate-700 rounded-md shadow-lg overflow-hidden">

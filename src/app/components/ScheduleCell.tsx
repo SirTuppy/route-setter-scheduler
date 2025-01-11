@@ -7,7 +7,7 @@ import { dataManager } from './DataManager';
 import { getStandardizedDateKey, getDateForDatabase } from '../utils/dateUtils';
 import { useAuth } from '@/providers/auth-provider';
 import LiveCell from './LiveCell';
-import { Button}  from '../../components/ui/button';
+import { Button }  from '../../components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -17,6 +17,8 @@ import {
     DialogTitle,
   } from "@/components/ui/dialog";
   import { Trash2 } from 'lucide-react';
+  import { holidays, Holiday } from '../config/holidays';
+
 
 interface Wall {
     id: string;
@@ -56,11 +58,18 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
     const gymKey = `${gym}-${dateKey}`;
     const currentData = scheduleData[gymKey] || {};
     const [clearDayDialogOpen, setClearDayDialogOpen] = useState(false);
+    
+    const dateString = getDateForDatabase(date);
 
     // Determine if user is head setter based on JWT claims
     const isHeadSetter = useMemo(() => {
         return user?.user_metadata?.role === 'head_setter';
     }, [user]);
+
+    const isHoliday = useMemo(() => {
+        return holidays.find((holiday) => holiday.date === dateString);
+    }, [dateString]);
+
 
     // Initialize local comment when currentData changes
     useEffect(() => {
@@ -196,8 +205,14 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
             date={getStandardizedDateKey(date)}
             onLockedStateChange={setIsLocked}
             isActive={isActive}
+             isHoliday={isHoliday}
         >
-            <div className={`${groupColor} border border-slate-700 rounded-md min-h-[200px] relative group`}>
+            <div className={`relative border border-slate-700 rounded-md min-h-[200px] group ${groupColor} ${isHoliday ? 'bg-red-900/50' : ''}`}>
+                  {isHoliday && (
+                         <div className="left-0 right-0 bottom-0 flex flex-col justify-center items-center text-xl font-bold text-red-500 z-10 pointer-events-none">
+                            {isHoliday.name}
+                         </div>
+                )}
                 <div className="space-y-2 p-2">
                     {isLocked && !isHeadSetter && (
                         <div className="text-amber-500 text-sm mb-2">
@@ -215,11 +230,11 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                                     getDisplayValue={getWallDisplayValue}
                                     getId={getWallId}
                                     groupBy={(wall) => wall.wall_type === 'boulder' ? 'Boulder Walls' : 'Rope Walls'}
-                                    placeholder={isHeadSetter ? "Select walls" : "Walls (view only)"}
+                                     placeholder={isHeadSetter && !isHoliday ? "Select walls" : "Walls (view only)"}
                                     variant="outline"
                                     size="sm"
                                     className="flex-1"
-                                    disabled={!isHeadSetter || isLocked}
+                                    disabled={!isHeadSetter || isLocked || !!isHoliday}
                                 />
                                 {isHeadSetter && currentData.id && !isLocked && (
                                     <Button
@@ -227,6 +242,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                                         size="icon"
                                         onClick={() => setClearDayDialogOpen(true)}
                                         className="bg-slate-700/50 hover:bg-red-900/50 text-slate-200 h-8 w-8 shrink-0 flex-none"
+                                         disabled={!isHeadSetter || !!isHoliday}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -251,11 +267,12 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                         getDisplayValue={getSetterDisplayValue}
                         getId={getSetterId}
                         groupBy={setterGrouping}
-                        placeholder={isHeadSetter ? "Select setters" : "Setters (view only)"}
+                        isHeadSetter={(item) => item.role === 'head_setter'}
+                         placeholder={isHeadSetter && !isHoliday ? "Select setters" : "Setters (view only)"}
                         variant="outline"
                         size="sm"
                         className="w-full"
-                        disabled={!isHeadSetter || isLocked || conflictingSetters.reduce((acc, id) => ({
+                        disabled={!isHeadSetter || isLocked || !!isHoliday || conflictingSetters.reduce((acc, id) => ({
                             ...acc,
                             [id]: true
                         }), {})}
@@ -271,7 +288,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                         }}
                         onBlur={handleCommentBlur}
                         placeholder={isHeadSetter ? "Add comments..." : "Comments (view only)"}
-                        readOnly={!isHeadSetter || isLocked}
+                        readOnly={isLocked}
                     />             
                 </div>
             </div>
@@ -314,6 +331,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
                                 setClearDayDialogOpen(false);
                             }}
                             className="bg-red-600 hover:bg-red-700 text-white border-red-600"
+                             disabled={!isHeadSetter}
                         >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Clear Day

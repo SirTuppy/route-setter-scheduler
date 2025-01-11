@@ -1,25 +1,46 @@
-// app/components/ScheduleHeader.tsx
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { SubmitTimeOffButton } from './SubmitTimeOffButton';
-import { ViewTimeOffButton } from './ViewTimeOffButton';
-import { WallEditorButton } from './WallEditorButton';
-import { YellowPageButton } from './YellowPageButton';
-import { MyScheduleButton } from './myScheduleButton';
-import { CrewEditorButton } from './CrewEditorButton';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import UserMenu from './UserMenu';
+import HeadSetterMenu from './HeadSetterMenu';
+import { CalendarIcon } from '@radix-ui/react-icons';
 import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import GymFilter from './GymFilter';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface ScheduleHeaderProps {
     currentDate: Date;
     onDateChange: (date: Date) => void;
+    datePickerOpen: boolean;
+    setDatePickerOpen: (open: boolean) => void;
+    gymGroups: Record<string, any>;
+    hiddenGyms: Set<string>;
+    onToggleGym: (gymId: string) => void;
 }
 
 const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
   currentDate,
   onDateChange,
+  datePickerOpen,
+  setDatePickerOpen,
+  gymGroups,
+  hiddenGyms,
+  onToggleGym
 }) => {
+  const { isHeadSetter } = usePermissions();
+  
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      onDateChange(date);
+      setDatePickerOpen(false);
+    }
+  };
 
   const adjustDate = (weeks: number) => {
     const newDate = new Date(currentDate);
@@ -37,32 +58,40 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
         Previous 2 Weeks
       </Button>
       <div className="flex gap-2 items-center">
-            <div className="flex items-center gap-2">
-    <Input
-      type="date"
-      value={format(currentDate, 'yyyy-MM-dd')}
-      onChange={(e) => {
-        const selectedDate = new Date(e.target.value);
-        // Check if it's a Monday (1)
-        if (selectedDate.getDay() !== 1) {
-          // Find the next Monday
-          while (selectedDate.getDay() !== 1) {
-            selectedDate.setDate(selectedDate.getDate() + 1);
-          }
-        }
-        onDateChange(selectedDate);
-      }}
-      className="bg-slate-700 border-slate-600 text-slate-200 w-44"
-      step={7}
-    />
-  </div>
-        <UserMenu/>
-        <MyScheduleButton />
-        <SubmitTimeOffButton />
-        <ViewTimeOffButton />
-        <WallEditorButton />
-        <CrewEditorButton />
-        <YellowPageButton />
+        <GymFilter
+          gymGroups={gymGroups}
+          hiddenGyms={hiddenGyms}
+          onToggleGym={onToggleGym}
+        />
+        <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              className={cn(
+                'bg-slate-700 text-slate-200 hover:bg-slate-600',
+                datePickerOpen && 'bg-slate-700'
+              )}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4"/>
+              {format(currentDate, 'MMM dd, yyyy')}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0 bg-slate-700 border-slate-700">
+            <Calendar
+              mode="single"
+              selected={currentDate}
+              onSelect={handleDateSelect}
+              classNames={{
+                day: "text-slate-300",
+                month: "text-slate-300",
+                year: "text-slate-300",
+                day_selected: "bg-blue-500 text-white"
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+        <UserMenu />
+        {isHeadSetter && <HeadSetterMenu />}
       </div>
       <Button
         variant="outline"

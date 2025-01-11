@@ -231,9 +231,6 @@ console.log('Received entries:', entries);
             <ScheduleHeader
                 currentDate={currentDate}
                 onDateChange={setCurrentDate}
-            />
-
-            <GymFilter
                 gymGroups={gymGroups}
                 hiddenGyms={hiddenGyms}
                 onToggleGym={toggleGym}

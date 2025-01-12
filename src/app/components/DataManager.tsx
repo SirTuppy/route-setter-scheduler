@@ -306,96 +306,136 @@ console.log('Raw database response:', entries);
   async updateScheduleEntry(entry: ScheduleEntry): Promise<ScheduleEntry> {
     try {
       
-      const { data: scheduleEntry, error: scheduleError } = await this.supabase
-        .from('schedule_entries')
-        .update({
-          schedule_date: entry.schedule_date,
-          gym_id: entry.gym_id,
-          comments: entry.comments,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', entry.id)
-        .select()
-        .single();
-  
-      if (scheduleError) {
-        console.error('Schedule entry update error:', scheduleError);
-        throw scheduleError;
-      }
-  
-      console.log('Updated schedule entry:', scheduleEntry);
-  
-      // Delete existing relations
-      console.log('Deleting existing wall assignments');
-      const { error: deleteWallsError } = await this.supabase
-        .from('schedule_entry_walls')
-        .delete()
-        .eq('schedule_entry_id', entry.id);
-  
-      if (deleteWallsError) {
-        console.error('Wall deletion error:', deleteWallsError);
-        throw deleteWallsError;
-      }
-  
-      console.log('Deleting existing setter assignments');
-      const { error: deleteSettersError } = await this.supabase
-        .from('schedule_setters')
-        .delete()
-        .eq('schedule_entry_id', entry.id);
-  
-      if (deleteSettersError) {
-        console.error('Setter deletion error:', deleteSettersError);
-        throw deleteSettersError;
-      }
-  
-      // Insert new wall assignments
-      if (entry.walls.length > 0) {
-        const wallAssignments = entry.walls.map(wallId => ({
-          schedule_entry_id: entry.id,
-          wall_id: wallId
-        }));
-        
-        console.log('Creating new wall assignments:', wallAssignments);
-        
-        const { error: wallsError } = await this.supabase
+        const { data: scheduleEntry, error: scheduleError } = await this.supabase
+          .from('schedule_entries')
+          .update({
+            schedule_date: entry.schedule_date,
+            gym_id: entry.gym_id,
+            comments: entry.comments,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', entry.id)
+          .select()
+          .single();
+
+          if (scheduleError) {
+            console.error('Schedule entry update error:', scheduleError);
+            throw scheduleError;
+          }
+    
+          console.log('Updated schedule entry:', scheduleEntry);
+
+        // Fetch current assignments for comparison
+        const { data: currentWalls, error: currentWallsError } = await this.supabase
+            .from('schedule_entry_walls')
+            .select('wall_id')
+            .eq('schedule_entry_id', entry.id);
+
+        if (currentWallsError) {
+            console.error('Error fetching current walls:', currentWallsError);
+            throw currentWallsError;
+        }
+
+        const { data: currentSetters, error: currentSettersError } = await this.supabase
+            .from('schedule_setters')
+            .select('user_id')
+            .eq('schedule_entry_id', entry.id);
+
+        if (currentSettersError) {
+            console.error('Error fetching current setters:', currentSettersError);
+            throw currentSettersError;
+        }
+
+
+        const currentWallIds = currentWalls.map(w => w.wall_id);
+        const currentSetterIds = currentSetters.map(s => s.user_id);
+
+        // Walls diff
+        const wallsToAdd = entry.walls.filter(id => !currentWallIds.includes(id));
+        const wallsToRemove = currentWallIds.filter(id => !entry.walls.includes(id));
+
+        // Setters diff
+        const settersToAdd = entry.setters.filter(id => !currentSetterIds.includes(id));
+        const settersToRemove = currentSetterIds.filter(id => !entry.setters.includes(id));
+
+      // Remove walls
+      if (wallsToRemove.length > 0) {
+        console.log('Deleting walls:', wallsToRemove);
+        const { error: deleteWallsError } = await this.supabase
           .from('schedule_entry_walls')
-          .insert(wallAssignments);
-  
-        if (wallsError) {
-          console.error('Wall assignment error:', wallsError);
-          throw wallsError;
+          .delete()
+          .eq('schedule_entry_id', entry.id)
+          .in('wall_id', wallsToRemove);
+    
+        if (deleteWallsError) {
+            console.error('Error removing walls:', deleteWallsError);
+            throw deleteWallsError
         }
       }
-  
-      // Insert new setter assignments
-      if (entry.setters.length > 0) {
-        const setterAssignments = entry.setters.map(userId => ({
+
+      //Add walls
+      if (wallsToAdd.length > 0) {
+        const wallAssignments = wallsToAdd.map(wallId => ({
+            schedule_entry_id: entry.id,
+            wall_id: wallId
+          }));
+          
+          console.log('Creating new wall assignments:', wallAssignments);
+          
+          const { error: wallsError } = await this.supabase
+            .from('schedule_entry_walls')
+            .insert(wallAssignments);
+    
+          if (wallsError) {
+            console.error('Wall assignment error:', wallsError);
+            throw wallsError;
+          }
+      }
+      
+      // Remove setters
+      if(settersToRemove.length > 0) {
+        console.log('Removing setters:', settersToRemove);
+        const { error: deleteSettersError } = await this.supabase
+        .from('schedule_setters')
+        .delete()
+        .eq('schedule_entry_id', entry.id)
+        .in('user_id', settersToRemove);
+
+        if (deleteSettersError) {
+            console.error('Error removing setters:', deleteSettersError);
+          throw deleteSettersError;
+        }
+      }
+
+      // Add setters
+      if (settersToAdd.length > 0) {
+        const setterAssignments = settersToAdd.map(userId => ({
           schedule_entry_id: entry.id,
           user_id: userId
         }));
         
-        console.log('Creating new setter assignments:', setterAssignments);
-        
+          console.log('Creating new setter assignments:', setterAssignments);
+          
         const { error: settersError } = await this.supabase
           .from('schedule_setters')
           .insert(setterAssignments);
-  
-        if (settersError) {
-          console.error('Setter assignment error:', settersError);
-          throw settersError;
-        }
+    
+          if (settersError) {
+            console.error('Setter assignment error:', settersError);
+            throw settersError;
+          }
       }
   
-      return {
-        ...scheduleEntry,
-        walls: entry.walls,
-        setters: entry.setters
-      };
-    } catch (error) {
-      console.error('Error in updateScheduleEntry:', error);
-      throw new SchedulerError('Failed to update schedule entry', ErrorCodes.DATA_UPDATE_ERROR);
+        return {
+          ...scheduleEntry,
+          walls: entry.walls,
+          setters: entry.setters
+        };
+      } catch (error) {
+        console.error('Error in updateScheduleEntry:', error);
+        throw new SchedulerError('Failed to update schedule entry', ErrorCodes.DATA_UPDATE_ERROR);
     }
-  }
+}
   
   async deleteScheduleEntry(id: string): Promise<void> {
     try {
@@ -791,6 +831,51 @@ async updateCrewHeadSetter(crewId: string, headSetterId: string): Promise<void> 
   } catch (error) {
     console.error('Error updating crew head setter:', error);
     throw new SchedulerError('Failed to update crew head setter', ErrorCodes.DATA_UPDATE_ERROR);
+  }
+}
+
+async createWall(wall: Omit<Wall, 'id' | 'created_at' | 'updated_at'>) {
+  try {
+    const { data, error } = await this.supabase
+      .from('walls')
+      .insert({
+        ...wall,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('DataManager: Error creating wall:', error);
+      return { error };
+    }
+
+    console.log('DataManager: Wall created successfully:', data);
+    return { data, error: null };
+  } catch (error) {
+    console.error('DataManager: Create wall error:', error);
+    return { data: null, error };
+  }
+}
+
+async deleteWall(wallId: string) {
+  try {
+    const { data, error } = await this.supabase
+      .from('walls')
+      .delete()
+      .eq('id', wallId);
+
+    if (error) {
+      console.error('DataManager: Error deleting wall:', error);
+      return { error };
+    }
+
+    console.log('DataManager: Wall deleted successfully');
+    return { data, error: null };
+  } catch (error) {
+    console.error('DataManager: Delete wall error:', error);
+    return { data: null, error };
   }
 }
 

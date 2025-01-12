@@ -27,17 +27,19 @@ interface LiveCellProps {
   date: string;
   children: React.ReactNode;
   onLockedStateChange: (locked: boolean) => void;
+   hiddenGyms: Set<string>;
 }
 
 let activeCellRef: React.MutableRefObject<string | null> = { current: null };
 
-const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStateChange }) => {
+const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStateChange, hiddenGyms }) => {
   const { user } = useAuth();
   const [activeUsers, setActiveUsers] = useState<Map<string, ActiveUser>>(new Map());
   const [isFocused, setIsFocused] = useState(false);
   const channelRef = useRef<any>(null);
   const cellRef = useRef<HTMLDivElement>(null);
   const cellId = `${gymId}-${date}`;
+  const isVisible = hiddenGyms && !hiddenGyms.has(gymId);
 
   // Handle document clicks
   useEffect(() => {
@@ -67,75 +69,81 @@ const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStat
     return false;
   };
 
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase.channel(`cell_presence:${cellId}`, {
-      config: {
-        presence: {
-          key: cellId,
-        },
-      },
-    });
-
-    channel.on('presence', { event: 'sync' }, () => {
-      const state = channel.presenceState();
-      
-      const newActiveUsers = new Map();
-      Object.entries(state).forEach(([key, presences]) => {
-        const presence = presences[0] as any;
-        const colorIndex = parseInt(presence.user_id.slice(-4), 16) % USER_COLORS.length;
+    useEffect(() => {
+        if (!user) return;
         
-        newActiveUsers.set(presence.user_id, {
-          id: presence.user_id,
-          name: presence.user_name,
-          color: USER_COLORS[colorIndex],
-          timestamp: presence.timestamp,
-          lastActivity: presence.lastActivity || presence.timestamp,
-          isEditing: presence.isEditing || false
-        });
-      });
-      
-      setActiveUsers(newActiveUsers);
-      onLockedStateChange(isLockedByOther());
-    });
+    let channel: any = null;
+        if (isVisible) {
+             channel = supabase.channel(`cell_presence:${cellId}`, {
+              config: {
+                presence: {
+                  key: cellId,
+                },
+              },
+            });
 
-    channel.subscribe();
-    channelRef.current = channel;
+            channel.on('presence', { event: 'sync' }, () => {
+              const state = channel.presenceState();
+              
+              const newActiveUsers = new Map();
+              Object.entries(state).forEach(([key, presences]) => {
+                const presence = presences[0] as any;
+                const colorIndex = parseInt(presence.user_id.slice(-4), 16) % USER_COLORS.length;
+                
+                newActiveUsers.set(presence.user_id, {
+                  id: presence.user_id,
+                  name: presence.user_name,
+                  color: USER_COLORS[colorIndex],
+                  timestamp: presence.timestamp,
+                  lastActivity: presence.lastActivity || presence.timestamp,
+                  isEditing: presence.isEditing || false
+                });
+              });
+              
+              setActiveUsers(newActiveUsers);
+              onLockedStateChange(isLockedByOther());
+            });
 
-    return () => {
-      if (isFocused) {
-        handleBlur();
-      }
-      channel.unsubscribe();
-    };
-  }, [cellId, user]);
+            channel.subscribe();
+            channelRef.current = channel;
+        } else {
+            if(isFocused) {
+              handleBlur();
+            }
+        }
 
-  useEffect(() => {
-    if (!isFocused || !user || !channelRef.current) return;
+        return () => {
+        if(channel) {
+           channel.unsubscribe();
+        }
+      };
+    }, [cellId, user, isVisible]);
 
-    const updateActivity = async () => {
-      await channelRef.current.track({
-        user_id: user.id,
-        user_name: user.email?.split('@')[0] || 'Unknown User',
-        timestamp: new Date().toISOString(),
-        lastActivity: new Date().toISOString(),
-        isEditing: true
-      });
-    };
+    useEffect(() => {
+        if (!isFocused || !user || !channelRef.current) return;
 
-    updateActivity();
+        const updateActivity = async () => {
+          await channelRef.current.track({
+            user_id: user.id,
+            user_name: user.email?.split('@')[0] || 'Unknown User',
+            timestamp: new Date().toISOString(),
+            lastActivity: new Date().toISOString(),
+            isEditing: true
+          });
+        };
 
-    const interval = setInterval(updateActivity, ACTIVITY_TIMEOUT / 2);
-    return () => {
-      clearInterval(interval);
-    };
-  }, [isFocused, user]);
+        updateActivity();
+
+        const interval = setInterval(updateActivity, ACTIVITY_TIMEOUT / 2);
+        return () => {
+          clearInterval(interval);
+        };
+      }, [isFocused, user]);
 
   const handleFocus = async (event: React.MouseEvent | React.FocusEvent) => {
     event.stopPropagation(); // Prevent the click from bubbling to document
     
-    if (!user || !channelRef.current || isLockedByOther()) {
+    if (!user || !channelRef.current || isLockedByOther() || !isVisible) {
       return;
     }
 
@@ -178,7 +186,7 @@ const LiveCell: React.FC<LiveCellProps> = ({ gymId, date, children, onLockedStat
     <div
       ref={cellRef}
       className={`live-cell-container relative group ${isLockedByOther() ? 'pointer-events-none opacity-50' : ''}`}
-      tabIndex={isLockedByOther() ? -1 : 0}
+      tabIndex={isLockedByOther() || !isVisible ? -1 : 0}
       onFocus={handleFocus}
       onClick={handleFocus}
       data-cell-id={cellId}

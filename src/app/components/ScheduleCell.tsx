@@ -36,7 +36,8 @@ interface ScheduleCellProps {
     scheduleData: Record<string, any>;
     updateData: (updater: (prev: any) => any) => void;
     groupColor: string;
-     isActive: boolean;
+    isActive: boolean;
+    hiddenGyms: Set<string>; // Add hiddenGyms to the ScheduleCellProps
 }
 
 const ScheduleCell: React.FC<ScheduleCellProps> = ({
@@ -47,7 +48,8 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
     scheduleData,
     updateData,
     groupColor,
-    isActive
+    isActive,
+     hiddenGyms // Add hiddenGyms as a prop
 }) => {
     const [isLocked, setIsLocked] = useState(false);
     const [localComment, setLocalComment] = useState('');
@@ -206,6 +208,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
             onLockedStateChange={setIsLocked}
             isActive={isActive}
              isHoliday={isHoliday}
+            hiddenGyms={hiddenGyms} // Pass hiddenGyms to LiveCell
         >
             <div className={`relative border border-slate-700 rounded-md min-h-[200px] group ${groupColor} ${isHoliday ? 'bg-red-900/50' : ''}`}>
                   {isHoliday && (

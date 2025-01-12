@@ -324,6 +324,7 @@ console.log('Received entries:', entries);
                                                             updateData={setScheduleData}
                                                             groupColor={group.color}
                                                             isActive={index < 5}
+                                                            {...{ hiddenGyms }}
                                                         />
                                                     </React.Fragment>
                                                 );

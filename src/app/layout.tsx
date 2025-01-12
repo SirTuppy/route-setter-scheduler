@@ -1,12 +1,13 @@
 // app/layout.tsx
 import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/providers/auth-provider";
-// import Navigation from "../app/components/Navigation";
 import "./globals.css";
 
+/*
 export const viewport: Viewport = {
   width: "1024"
 };
+*/
 
 export const metadata: Metadata = {
   title: "DFW Schedule",

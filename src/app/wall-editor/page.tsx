@@ -32,109 +32,30 @@ const GYM_GROUPS = {
   planoTC: { color: 'bg-orange-900/20', border: 'border-orange-600' }
 } as const;
 
-const sortWallsByName = (walls: Wall[]) => {
-  return [...walls].sort((a, b) => {
-    const aMatch = a.name.match(/(\D+)(\d+)?/);
-    const bMatch = b.name.match(/(\D+)(\d+)?/);
-
-    if (aMatch && bMatch) {
-      const aPrefix = aMatch[1] || '';
-      const bPrefix = bMatch[1] || '';
-      const aNum = parseInt(aMatch[2] || '0', 10);
-      const bNum = parseInt(bMatch[2] || '0', 10);
-
-      if (aPrefix < bPrefix) return -1;
-      if (aPrefix > bPrefix) return 1;
-
-      return aNum - bNum;
-    }
-    
-    return a.name.localeCompare(b.name);
-  });
-};
-
-export default function WallEditor() {
-  const [walls, setWalls] = useState<Wall[]>([]);
+const WallTable = ({ walls, gymId }: { walls: Wall[], gymId: string }) => {
   const [editingWall, setEditingWall] = useState<Wall | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [expandedGyms, setExpandedGyms] = useState<Record<string, boolean>>({});
-  const [expandedTypes, setExpandedTypes] = useState<Record<string, Record<string, boolean>>>({});
-  const { isHeadSetter } = usePermissions();
-  const router = useRouter();
-
-  useEffect(() => {
-    const loadWalls = async () => {
-      try {
-        const allWalls = await dataManager.fetchWalls();
-        setWalls(allWalls);
-        const initialGymState = Object.keys(GYM_NAMES).reduce((acc, gym) => ({
-          ...acc, 
-          [gym]: true
-        }), {});
-        setExpandedGyms(initialGymState);
-
-        const initialTypeState = Object.keys(GYM_NAMES).reduce((acc, gym) => ({
-          ...acc,
-          [gym]: { boulder: true, rope: true }
-        }), {});
-        setExpandedTypes(initialTypeState);
-      } catch (error) {
-        setError('Failed to load walls');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadWalls();
-  }, []);
-
-  const filteredWalls = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    
-    const filtered = walls.filter(wall => 
-      wall.name.toLowerCase().includes(query) ||
-      (GYM_NAMES[wall.gym_id]?.toLowerCase() || '').includes(query) ||
-      wall.wall_type.toLowerCase().includes(query)
-    );
-
-    return filtered.reduce((acc, wall) => {
-      if (!acc[wall.gym_id]) {
-        acc[wall.gym_id] = {
-          boulder: [],
-          rope: []
-        };
-      }
-      acc[wall.gym_id][wall.wall_type].push(wall);
-      return acc;
-    }, {} as Record<string, { boulder: Wall[], rope: Wall[] }>);
-  }, [walls, searchQuery]);
-
+  
   const handleSave = async (wall: Wall) => {
     try {
       const { data, error } = await dataManager.updateWall(wall);
-      
       if (error) throw error;
-
-      setWalls(walls.map(w => w.id === wall.id ? wall : w));
       setEditingWall(null);
     } catch (error) {
       console.error('Failed to save changes:', error);
-      setError('Failed to save changes: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
-  const WallTable = ({ walls, gymId }: { walls: Wall[], gymId: string }) => (
-    <div className={`rounded-lg border ${GYM_GROUPS[gymId].border} ${GYM_GROUPS[gymId].color} p-4`}>
-      <table className="w-full text-slate-200">
+  return (
+    <div className={`rounded-lg border ${GYM_GROUPS[gymId].border} ${GYM_GROUPS[gymId].color} p-4 overflow-x-auto`}>
+      <table className="w-full text-slate-200 min-w-[600px]">
         <thead>
           <tr className="border-b border-slate-700">
-            <th className="text-left p-2 w-24">Wall</th>
-            <th className="text-left p-2 w-24">Type</th>
-            <th className="text-left p-2 w-24">Angle</th>
-            <th className="text-left p-2 w-24">Difficulty</th>
-            <th className="text-left p-2 w-28">Climbs/Setter</th>
-            <th className="text-left p-2 w-24">Actions</th>
+            <th className="text-left p-2">Wall</th>
+            <th className="text-left p-2">Type</th>
+            <th className="text-left p-2">Angle</th>
+            <th className="text-left p-2">Difficulty</th>
+            <th className="text-left p-2">Climbs/Setter</th>
+            <th className="text-left p-2">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -202,7 +123,7 @@ export default function WallEditor() {
                 </>
               ) : (
                 <>
-                  <td className="p-2 truncate overflow-hidden whitespace-nowrap max-w-[150px]">{wall.name}</td>
+                  <td className="p-2">{wall.name}</td>
                   <td className="p-2">{wall.wall_type}</td>
                   <td className="p-2">{wall.angle || '-'}</td>
                   <td className="p-2">{wall.difficulty}</td>
@@ -224,107 +145,55 @@ export default function WallEditor() {
       </table>
     </div>
   );
+};
 
-  const GymContent = ({ gymId, gymWalls }: { gymId: string, gymWalls: { boulder: Wall[], rope: Wall[] } }) => {
-    const hasRopeWalls = gymWalls.rope.length > 0;
-    const hasBoulderWalls = gymWalls.boulder.length > 0;
+export default function WallEditor() {
+  const [walls, setWalls] = useState<Wall[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [expandedGyms, setExpandedGyms] = useState<Record<string, boolean>>({});
+  const { isHeadSetter } = usePermissions();
+  const router = useRouter();
 
-
-    const showCollapsibles = hasRopeWalls || (['denton', 'hill', 'fortWorth', 'carrolltonTC', 'planoTC'].includes(gymId) && hasBoulderWalls);
-
-    if(showCollapsibles){
-      return (
-        <>
-          {['boulder', 'rope'].map(type => {
-            if (!gymWalls[type]?.length) return null;
-            return (
-              <Collapsible
-                key={`${gymId}-${type}`}
-                open={expandedTypes[gymId]?.[type]}
-                onOpenChange={(isOpen) => 
-                  setExpandedTypes({
-                    ...expandedTypes,
-                    [gymId]: {...expandedTypes[gymId], [type]: isOpen}
-                  })
-                }
-                className="ml-6 space-y-2"
-              >
-                <CollapsibleTrigger className="flex items-center text-md font-medium text-slate-300 hover:text-slate-200">
-                  {expandedTypes[gymId]?.[type] ? 
-                    <ChevronDown className="h-4 w-4 mr-2" /> : 
-                    <ChevronRight className="h-4 w-4 mr-2" />
-                  }
-                  {type.charAt(0).toUpperCase() + type.slice(1)} Walls
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-4">
-                  <WallTable walls={sortWallsByName(gymWalls[type])} gymId={gymId} />
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
-        </>
-      );
-    }
-
-     return (
-          <div className="ml-6">
-            <WallTable walls={sortWallsByName(gymWalls.boulder)} gymId={gymId} />
-          </div>
-        );
-  };
-
-  const GymGrid = () => {
-    const gymPairs = Object.entries(GYM_NAMES).reduce<[string, string][]>((pairs, [gymId], index) => {
-      if (index % 2 === 0) {
-        pairs.push([gymId, Object.keys(GYM_NAMES)[index + 1]]);
+  useEffect(() => {
+    const loadWalls = async () => {
+      try {
+        const allWalls = await dataManager.fetchWalls();
+        setWalls(allWalls);
+        const initialGymState = Object.keys(GYM_NAMES).reduce((acc, gym) => ({
+          ...acc, 
+          [gym]: true
+        }), {});
+        setExpandedGyms(initialGymState);
+      } catch (error) {
+        setError('Failed to load walls');
+      } finally {
+        setLoading(false);
       }
-      return pairs;
-    }, []);
+    };
+    loadWalls();
+  }, []);
 
-    return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {gymPairs.map(([gym1Id, gym2Id], index) => (
-          <div key={index} className="flex flex-col lg:flex-row gap-6 pt-6">
-            {gym1Id && filteredWalls[gym1Id] && (
-              <div className="flex-1">
-                <Collapsible
-                  open={expandedGyms[gym1Id]}
-                  onOpenChange={(isOpen) => setExpandedGyms({...expandedGyms, [gym1Id]: isOpen})}
-                  className="space-y-2"
-                >
-                  <CollapsibleTrigger className="flex items-center w-full text-lg font-medium text-slate-200 hover:text-slate-100">
-                    {expandedGyms[gym1Id] ? <ChevronDown className="h-5 w-5 mr-2" /> : <ChevronRight className="h-5 w-5 mr-2" />}
-                    {GYM_NAMES[gym1Id]}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4 mt-2">
-                    <GymContent gymId={gym1Id} gymWalls={filteredWalls[gym1Id]} />
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
-            
-            {gym2Id && filteredWalls[gym2Id] && (
-              <div className="flex-1">
-                <Collapsible
-                  open={expandedGyms[gym2Id]}
-                  onOpenChange={(isOpen) => setExpandedGyms({...expandedGyms, [gym2Id]: isOpen})}
-                  className="space-y-2"
-                >
-                  <CollapsibleTrigger className="flex items-center w-full text-lg font-medium text-slate-200 hover:text-slate-100">
-                    {expandedGyms[gym2Id] ? <ChevronDown className="h-5 w-5 mr-2" /> : <ChevronRight className="h-5 w-5 mr-2" />}
-                    {GYM_NAMES[gym2Id]}
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4 mt-2">
-                    <GymContent gymId={gym2Id} gymWalls={filteredWalls[gym2Id]} />
-                  </CollapsibleContent>
-                </Collapsible>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    );
-  };
+  const groupedWalls = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return walls.reduce((acc, wall) => {
+      if (
+        wall.name.toLowerCase().includes(query) ||
+        (GYM_NAMES[wall.gym_id]?.toLowerCase() || '').includes(query) ||
+        wall.wall_type.toLowerCase().includes(query)
+      ) {
+        if (!acc[wall.gym_id]) {
+          acc[wall.gym_id] = {
+            boulder: [],
+            rope: []
+          };
+        }
+        acc[wall.gym_id][wall.wall_type].push(wall);
+      }
+      return acc;
+    }, {} as Record<string, { boulder: Wall[], rope: Wall[] }>);
+  }, [walls, searchQuery]);
 
   if (!isHeadSetter) {
     return (
@@ -338,33 +207,85 @@ export default function WallEditor() {
     );
   }
 
+  const gymPairs = Object.entries(GYM_NAMES).reduce<[string, string][]>((pairs, [gymId], index) => {
+    if (index % 2 === 0) {
+      pairs.push([gymId, Object.keys(GYM_NAMES)[index + 1]]);
+    }
+    return pairs;
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-900 p-4">
       <Card className="bg-slate-800 border-slate-700">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row items-center justify-between gap-4">
           <CardTitle className="text-2xl text-slate-100">Wall Editor</CardTitle>
-          <div className="flex items-center gap-4">
-            <div className="relative">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
+          <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
               <Input
                 type="text"
                 placeholder="Search walls, gyms, or types..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 bg-slate-700 border-slate-600 text-slate-200 w-64"
+                className="pl-8 bg-slate-700 border-slate-600 text-slate-200 w-full"
               />
             </div>
             <Button 
               variant="outline" 
-              className="bg-slate-700 text-slate-200"
+              className="bg-slate-700 text-slate-200 w-full sm:w-auto"
               onClick={() => router.push('/')}
             >
               Back to Schedule
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <GymGrid />
+        <CardContent className="space-y-6">
+          {gymPairs.map(([gym1Id, gym2Id], index) => (
+            <div key={index} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {[gym1Id, gym2Id].map(gymId => 
+                gymId && groupedWalls[gymId] && (
+                  <div key={gymId}>
+                    <Collapsible
+                      open={expandedGyms[gymId]}
+                      onOpenChange={(isOpen) => setExpandedGyms({...expandedGyms, [gymId]: isOpen})}
+                      className="space-y-2"
+                    >
+                      <CollapsibleTrigger className="flex items-center w-full text-lg font-medium text-slate-200 hover:text-slate-100">
+                        {expandedGyms[gymId] ? 
+                          <ChevronDown className="h-5 w-5 mr-2" /> : 
+                          <ChevronRight className="h-5 w-5 mr-2" />
+                        }
+                        {GYM_NAMES[gymId]}
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-4">
+                        {['boulder', 'rope'].map(type => {
+                          if (!groupedWalls[gymId][type]?.length) return null;
+                          return (
+                            <Collapsible
+                              key={`${gymId}-${type}`}
+                              defaultOpen={true}
+                              className="ml-6 space-y-2"
+                            >
+                              <CollapsibleTrigger className="flex items-center text-md font-medium text-slate-300 hover:text-slate-200">
+                                <ChevronDown className="h-4 w-4 mr-2" />
+                                {type.charAt(0).toUpperCase() + type.slice(1)} Walls
+                              </CollapsibleTrigger>
+                              <CollapsibleContent className="space-y-4">
+                                <WallTable 
+                                  walls={groupedWalls[gymId][type]} 
+                                  gymId={gymId} 
+                                />
+                              </CollapsibleContent>
+                            </Collapsible>
+                          );
+                        })}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  </div>
+                )
+              )}
+            </div>
+          ))}
           {error && (
             <div className="mt-4 p-2 bg-red-600/20 border border-red-600 rounded text-red-400">
               {error}

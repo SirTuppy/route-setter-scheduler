@@ -301,28 +301,28 @@ console.log('Received entries:', entries);
                                                 return (
                                                     <React.Fragment key={`${gymId}-${date.toString()}`}>
                                                         {date === dates[0] && (
-                                                            <div className={`${group.color} p-2 font-medium rounded-md ${group.border} text-slate-200`}>
-                                                                <div className="flex flex-col gap-2">
-                                                                    <span>{gym.name}</span>
-                                                                    {userDetails?.role === 'head_setter' && (
-                                                                        <>
-                                                                            <Button
-    variant="outline"
-    size="sm"
-    onClick={() => {
-        setGymToDelete(gymId);
-        setWeekToDelete([]);  // Reset selection
-        setConfirmationOpen(true);
-    }}
-    className="w-full bg-slate-700 hover:bg-red-900 text-slate-200 border-slate-600"
->
-    Clear week
-</Button>
-                                                                        </>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
+    <div className={`${group.color} p-2 font-medium rounded-md ${group.border} text-slate-200`}>
+        <div className="flex flex-col gap-2">
+            <span>{gym.name}</span>
+            {userDetails?.role === 'head_setter' && (
+                <>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            setGymToDelete(gymId);
+                            setWeekToDelete([]);
+                            setConfirmationOpen(true);
+                        }}
+                        className="w-full bg-slate-700 hover:bg-red-900 text-slate-200 border-slate-600"
+                    >
+                        Clear week
+                    </Button>
+                </>
+            )}
+        </div>
+    </div>
+)}
                                                         <ScheduleCell
                                                             gym={gymId}
                                                             walls={gym.walls}

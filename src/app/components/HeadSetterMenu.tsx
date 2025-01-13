@@ -27,21 +27,21 @@ const HeadSetterMenu = () => {
         <DropdownMenuLabel className="text-slate-300">Management Tools</DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-slate-700" />
         <DropdownMenuItem 
-          className="text-slate-200 focus:bg-slate-700 focus:text-slate-200 cursor-pointer"
-          onClick={() => router.push('/wall-editor')}
-        >
-          <Settings className="mr-2 h-4 w-4" />
-          Wall Editor
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          className="text-slate-200 focus:bg-slate-700 focus:text-slate-200 cursor-pointer"
+          className="text-slate-200 focus:bg-yellow-600 focus:text-slate-200 cursor-pointer"
           onClick={() => router.push('/yellow-page')}
         >
           <FileText className="mr-2 h-4 w-4" />
           Yellow Page Exporter
         </DropdownMenuItem>
         <DropdownMenuItem 
-          className="text-slate-200 focus:bg-slate-700 focus:text-slate-200 cursor-pointer"
+          className="text-slate-200 focus:bg-orange-700 focus:text-slate-200 cursor-pointer"
+          onClick={() => router.push('/wall-editor')}
+        >
+          <Settings className="mr-2 h-4 w-4" />
+          Wall Editor
+        </DropdownMenuItem>
+        <DropdownMenuItem 
+          className="text-slate-200 focus:bg-red-700 focus:text-slate-200 cursor-pointer"
           onClick={() => router.push('/crew-editor')}
         >
           <Users className="mr-2 h-4 w-4" />

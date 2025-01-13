@@ -85,7 +85,7 @@ const GymFilter: React.FC<GymFilterProps> = ({
       <DropdownMenuTrigger asChild>
         <Button 
           variant="outline" 
-          className="border-teal-800 hover:bg-teal-700 text-slate-200 bg-teal-800 gap-2"
+          className="border-emerald-700 hover:bg-emerald-900 text-slate-200 bg-emerald-800 gap-2"
         >
           <Building2 size={16} />
           Gyms ({visibleCount}/{allGymIds.length})

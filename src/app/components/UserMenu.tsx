@@ -18,7 +18,6 @@ const UserMenu = () => {
   
   if (!user) return null;
 
-  // Extract name from email (e.g., "Luke Sherlock" from "Luke.Sherlock@movementgyms.com")
   const displayName = user.email?.split('@')[0].replace(/([A-Z])/g, ' $1').trim();
   
   return (
@@ -39,21 +38,21 @@ const UserMenu = () => {
         </DropdownMenuLabel>
         <DropdownMenuSeparator className="bg-slate-700" />
         <DropdownMenuItem 
-          className="text-slate-200 focus:bg-slate-700 focus:text-slate-200 cursor-pointer"
+          className="text-slate-200 focus:bg-green-700 focus:text-slate-200 cursor-pointer"
           onClick={() => router.push('/my-schedule')}
         >
           <Calendar className="mr-2 h-4 w-4" />
           My Schedule
         </DropdownMenuItem>
         <DropdownMenuItem 
-          className="text-slate-200 focus:bg-slate-700 focus:text-slate-200 cursor-pointer"
+          className="text-slate-200 focus:bg-blue-700 focus:text-slate-200 cursor-pointer"
           onClick={() => router.push('/time-off')}
         >
           <Clock className="mr-2 h-4 w-4" />
           Request Time Off
         </DropdownMenuItem>
         <DropdownMenuItem 
-          className="text-slate-200 focus:bg-slate-700 focus:text-slate-200 cursor-pointer"
+          className="text-slate-200 focus:bg-purple-700 focus:text-slate-200 cursor-pointer"
           onClick={() => router.push('/time-off/view')}
         >
           <ListChecks className="mr-2 h-4 w-4" />
@@ -61,7 +60,7 @@ const UserMenu = () => {
         </DropdownMenuItem>
         <DropdownMenuSeparator className="bg-slate-700" />
         <DropdownMenuItem 
-          className="text-red-400 focus:text-red-400 focus:bg-slate-700 cursor-pointer"
+          className="text-red-400 focus:text-red-400 focus:bg-red-900 cursor-pointer"
           onClick={() => signOut()}
         >
           <LogOut className="mr-2 h-4 w-4" />

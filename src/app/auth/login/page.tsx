@@ -38,7 +38,7 @@ export default function LoginPage() {
             <Card className="w-full max-w-md bg-slate-800 border-slate-700">
                 <CardHeader>
                     <CardTitle className="text-2xl text-center text-slate-100">
-                        Sign In
+                        Greetings Traveller
                     </CardTitle>
                 </CardHeader>
                 <CardContent>

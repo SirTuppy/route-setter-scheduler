@@ -3,12 +3,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/providers/auth-provider';
-import { dataManager, TimeOffRequest, User, ScheduleConflict } from '../../components/DataManager';
+import { dataManager, TimeOffRequest, User, ScheduleConflict, Crew } from '../../components/DataManager';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useRouter } from 'next/navigation';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 
 export default function ViewTimeOffPage() {
   const router = useRouter();
@@ -31,20 +31,27 @@ export default function ViewTimeOffPage() {
   const [showConflictDialog, setShowConflictDialog] = useState(false);
   const [conflicts, setConflicts] = useState<ScheduleConflict[]>([]);
   const [userCrew, setUserCrew] = useState<Crew | null>(null);
+  const [showApproveDialog, setShowApproveDialog] = useState(false);
 
-  const isHeadSetter = useMemo(() => 
+  const isHeadSetter = useMemo(() =>
     userDetails?.role === 'head_setter',
     [userDetails?.role]
   );
-  //console.log('userDetails:', userDetails);
 
     const refetchData = async (userId?:string) => {
       if (!user?.id) return;
 
       try {
-        const fetchedRequests = await dataManager.fetchTimeOffRequests(
-          isHeadSetter ? undefined : userId || user.id
-        );
+        setLoading(true); // Ensure loading is set when refetching
+        setError(null); // Clear any previous errors
+        let fetchedRequests: TimeOffRequest[] = [];
+
+        if (isHeadSetter && userCrew) {
+          fetchedRequests = await dataManager.fetchTimeOffRequestsForCrew(userCrew.id);
+        } else {
+          fetchedRequests = await dataManager.fetchTimeOffRequests(userId || user.id);
+        }
+
 
         setRequests({
           pending: fetchedRequests.filter(r => r.status === 'pending'),
@@ -53,19 +60,22 @@ export default function ViewTimeOffPage() {
         });
       } catch (error) {
         setError(error instanceof Error ? error.message : 'An unknown error occurred');
+      } finally {
+        setLoading(false); // Ensure loading is set to false after fetch, regardless of success or failure
       }
     };
+
 
   useEffect(() => {
     let mounted = true;
 
     const loadData = async () => {
         if (!user?.id) return;
-        
+
         try {
             const details = await dataManager.fetchUserDetails(user.id);
             if (!mounted) return;
-            
+
             setUserDetails(details);
 
             // If user is a head setter, fetch their crew
@@ -76,8 +86,8 @@ export default function ViewTimeOffPage() {
                     setUserCrew(userCrew);
                 }
             }
-            
-          await refetchData();
+
+          await refetchData(user.id);
         } catch (error) {
             if (mounted) {
                 setError(error instanceof Error ? error.message : 'An unknown error occurred');
@@ -95,7 +105,7 @@ export default function ViewTimeOffPage() {
     return () => {
         mounted = false;
     };
-}, [user?.id]);
+}, [user?.id, isHeadSetter]); // Added isHeadSetter to dependency array
 
     const approveRequest = async (request: TimeOffRequest) => {
       if (!user?.id) return;
@@ -106,7 +116,7 @@ export default function ViewTimeOffPage() {
           'approved',
           user.id
         );
-          await refetchData(user.id);
+          await refetchData(user.id); // Refetch with user.id to ensure correct filtering
         setError(null);
       } catch (error) {
         setError(error instanceof Error ? error.message : 'An unknown error occurred');
@@ -115,21 +125,21 @@ export default function ViewTimeOffPage() {
 
   const handleApprove = async (request: TimeOffRequest) => {
     if (!user?.id) return;
-    
+
     try {
       const conflicts = await dataManager.checkTimeOffConflicts(
         request.user_id,
         request.start_date,
         request.end_date
       );
-  
+
       if (conflicts.length > 0) {
         setConflicts(conflicts);
         setSelectedRequest(request);
         setShowConflictDialog(true);
         return;
       }
-  
+
       await approveRequest(request);
     } catch (error) {
       setError(error instanceof Error ? error.message : 'An unknown error occurred');
@@ -138,7 +148,7 @@ export default function ViewTimeOffPage() {
 
   const handleApproveWithConflicts = async () => {
     if (!selectedRequest || !user?.id) return;
-    
+
     try {
       await approveRequest(selectedRequest);
       setShowConflictDialog(false);
@@ -160,7 +170,7 @@ export default function ViewTimeOffPage() {
                 denyReason
             );
 
-            await refetchData(user.id);
+            await refetchData(user.id); // Refetch with user.id to ensure correct filtering
             setShowDenyDialog(false);
             setDenyReason('');
             setSelectedRequest(null);
@@ -179,8 +189,8 @@ export default function ViewTimeOffPage() {
     });
   };
 
-  const RequestSection = ({ title, requests, status }: { 
-    title: string; 
+  const RequestSection = ({ title, requests, status }: {
+    title: string;
     requests: TimeOffRequest[];
     status: 'pending' | 'approved' | 'denied';
   }) => (
@@ -197,7 +207,7 @@ export default function ViewTimeOffPage() {
                   <div className="text-md font-semibold text-slate-200 border-b border-slate-700 pb-2">
                     {request.users?.name}'s Request
                   </div>
-                  
+
                   <div className="flex flex-col justify-between h-full">
                     <div className="space-y-1">
                       <p className="text-sm text-slate-200">
@@ -225,16 +235,19 @@ export default function ViewTimeOffPage() {
                         </p>
                       )}
                     </div>
-                    
+
                     {status === 'pending' && isHeadSetter && (
                       <div className="flex gap-2 mt-4">
                         <Button
-                          onClick={() => handleApprove(request)}
-                          className="bg-green-600 hover:bg-green-700 text-white text-sm py-1 h-8"
-                          size="default"
-                        >
-                          Approve (send to Vacation)
-                        </Button>
+  onClick={() => {
+    setSelectedRequest(request);  // Add this
+    setShowApproveDialog(true);
+  }}
+  className="bg-green-600 hover:bg-green-700 text-white text-sm py-1 h-8"
+  size="default"
+>
+  Approve
+</Button>
                         <Button
                           onClick={() => {
                             setSelectedRequest(request);
@@ -256,10 +269,6 @@ export default function ViewTimeOffPage() {
       )}
     </div>
   );
-
-  if (loading) {
-    return <div className="text-slate-200">Loading...</div>;
-  }
 
   if (error) {
     return <div className="text-red-400">{error}</div>;
@@ -356,6 +365,34 @@ export default function ViewTimeOffPage() {
         className="bg-green-600 hover:bg-green-700"
       >
         Approve Anyway
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+<Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
+  <DialogContent className="bg-slate-800 text-slate-200 border-slate-700">
+    <DialogHeader>
+      <DialogTitle>Approve Time Off Request</DialogTitle>
+      <DialogDescription className="text-slate-400">
+        Approving will automatically add this setter to the Vacation schedule for these dates.
+      </DialogDescription>
+    </DialogHeader>
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => setShowApproveDialog(false)}
+        className="bg-slate-700 hover:bg-slate-600 text-slate-200"
+      >
+        Cancel
+      </Button>
+      <Button
+        onClick={() => {
+          handleApprove(selectedRequest);
+          setShowApproveDialog(false);
+        }}
+        className="bg-green-600 hover:bg-green-700"
+      >
+        Confirm Approval
       </Button>
     </DialogFooter>
   </DialogContent>

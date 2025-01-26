@@ -246,7 +246,7 @@ console.log('Received entries:', entries);
                 />
                 
                 {/* Desktop View */}
-                <div className="hidden lg:block">
+                <div>
                     <ScheduleHeader
                         currentDate={currentDate}
                         onDateChange={setCurrentDate}
@@ -343,19 +343,6 @@ console.log('Received entries:', entries);
                         </div>
                     </div>
                 </div>
-    
-                {/* Mobile View */}
-                <MobileScheduleView 
-                    dates={dates}
-                    scheduleData={scheduleData}
-                    gymGroups={gymGroups}
-                    hiddenGyms={hiddenGyms}
-                    currentDate={currentDate}
-                    onDateChange={setCurrentDate}
-                    onToggleGym={toggleGym}
-                    setters={setters}
-                    userDetails={userDetails}
-                />
             </CardContent>
     
             {/* Clear week confirmation dialog */}

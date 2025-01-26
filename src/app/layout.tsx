@@ -3,11 +3,11 @@ import type { Metadata, Viewport } from "next";
 import { AuthProvider } from "@/providers/auth-provider";
 import "./globals.css";
 
-/*
+
 export const viewport: Viewport = {
   width: "1024"
 };
-*/
+
 
 export const metadata: Metadata = {
   title: "DFW Schedule",

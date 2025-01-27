@@ -4,8 +4,8 @@ import { Input } from '@/components/ui/input';
 import GymFilter from './GymFilter';
 import UserMenu from './UserMenu';
 import HeadSetterMenu from './HeadSetterMenu';
+import AdminMenu from './AdminMenu';
 import { usePermissions } from '../hooks/usePermissions';
-import { getMondayOfWeekForPicker } from '../utils/dateUtils';
 
 interface ScheduleHeaderProps {
     currentDate: Date;
@@ -22,7 +22,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
   hiddenGyms,
   onToggleGym
 }) => {
-  const { isHeadSetter } = usePermissions();
+  const { isHeadSetter, isAdmin } = usePermissions();
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedDate = new Date(e.target.value + 'T00:00:00');
@@ -68,6 +68,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
         />
         <UserMenu />
         {isHeadSetter && <HeadSetterMenu />}
+        {isAdmin && <AdminMenu />}
       </div>
       <Button
         variant="outline"

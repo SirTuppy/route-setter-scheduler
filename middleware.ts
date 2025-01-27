@@ -10,9 +10,6 @@ export async function middleware(req: NextRequest) {
     // Refresh session if expired - required for Server Components
     const { data: { session }, error } = await supabase.auth.getSession();
 
-    console.log('Middleware - Current path:', req.nextUrl.pathname);
-    console.log('Middleware - Session exists:', !!session);
-
     // If there's an error, we'll redirect to login
     if (error) {
         console.error('Middleware - Session error:', error);
@@ -36,12 +33,27 @@ export async function middleware(req: NextRequest) {
             console.log('Middleware - Session exists, redirecting to home');
             return NextResponse.redirect(new URL('/', req.url));
         }
+
+        // Admin route protection
+        if (req.nextUrl.pathname.startsWith('/admin')) {
+            // Check if user is admin
+            const { data: userData, error: userError } = await supabase
+                .from('users')
+                .select('role')
+                .eq('id', session.user.id)
+                .single();
+
+            if (userError || !userData || userData.role !== 'admin') {
+                console.log('Middleware - Non-admin attempting to access admin route');
+                return NextResponse.redirect(new URL('/', req.url));
+            }
+        }
     }
 
     return res;
 }
 
-// Update the matcher configuration
+// Update the matcher configuration to include admin routes explicitly
 export const config = {
     matcher: [
         /*
@@ -52,5 +64,6 @@ export const config = {
          * - public (public files)
          */
         '/((?!_next/static|_next/image|favicon.ico|public).*)',
+        '/admin/:path*'  // Explicitly match admin routes
     ],
 };

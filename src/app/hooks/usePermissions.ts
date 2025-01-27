@@ -6,12 +6,14 @@ import { supabase } from '@/lib/supabase';
 export function usePermissions() {
     const { user } = useAuth();
     const [isHeadSetter, setIsHeadSetter] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false); // Add isAdmin state
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         async function checkRole() {
             if (!user?.id) {
                 setIsHeadSetter(false);
+                setIsAdmin(false); // Initialize isAdmin to false as well
                 setLoading(false);
                 return;
             }
@@ -24,11 +26,14 @@ export function usePermissions() {
                     .single();
 
                 if (error) throw error;
-                
+
                 setIsHeadSetter(data?.role === 'head_setter');
+                setIsAdmin(data?.role === 'admin'); // Check for admin role and set isAdmin state
+
             } catch (error) {
                 console.error('Error checking user role:', error);
                 setIsHeadSetter(false);
+                setIsAdmin(false); // Set isAdmin to false in case of error
             } finally {
                 setLoading(false);
             }
@@ -37,5 +42,5 @@ export function usePermissions() {
         checkRole();
     }, [user]);
 
-    return { isHeadSetter, loading };
+    return { isHeadSetter, isAdmin, loading }; // Return isAdmin in the hook
 }

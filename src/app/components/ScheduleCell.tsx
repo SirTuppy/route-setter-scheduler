@@ -221,6 +221,8 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
         setClearDayDialogOpen(false);
     };
 
+    const availableSetters = setters.filter(setter => setter.role !== 'admin');
+    
   return (
     <LiveCell
       gymId={gym}
@@ -290,7 +292,7 @@ const ScheduleCell: React.FC<ScheduleCellProps> = ({
           )}
 
             <MultiSelect<User>
-              items={setters}
+              items={availableSetters}
               selectedIds={currentData.setters || []}
               onChange={(setterIds) => updateLocalData('setters', setterIds)}
               getDisplayValue={getSetterDisplayValue}

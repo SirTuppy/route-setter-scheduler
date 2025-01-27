@@ -79,6 +79,30 @@ interface ScheduleConflict {
   gym: string;
 }
 
+// Add to your existing interfaces in DataManager.ts
+interface UserCreateInput {
+  email: string;
+  name: string;
+  password?: string;
+  role: 'admin' | 'head_setter' | 'setter';
+  primary_gyms: string[];
+}
+
+interface UserUpdateInput {
+  id: string;
+  name?: string;
+  role?: 'admin' | 'head_setter' | 'setter';
+  primary_gyms?: string[];
+}
+
+interface GymCreateInput {
+  id: string;
+  name: string;
+  location: string;
+  paired_gym_id?: string | null;
+  active: boolean;
+}
+
 class DataManager {
     private supabase = supabase;
 
@@ -904,6 +928,125 @@ async updateWall(wall: Wall) {
   } catch (error) {
     console.error('DataManager: Update wall error:', error);
     return { data: null, error };
+  }
+}
+
+  // Add these methods to your DataManager class
+async createUser(input: UserCreateInput): Promise<User> {
+  try {
+    // First create the auth user if password is provided
+    let authUserId: string;
+    
+    if (input.password) {
+      const { data: authUser, error: authError } = await this.supabase.auth.admin.createUser({
+        email: input.email,
+        password: input.password,
+        email_confirm: true
+      });
+
+      if (authError) throw authError;
+      authUserId = authUser.user.id;
+    } else {
+      // If no password, create user with email invite
+      const { data: authUser, error: authError } = await this.supabase.auth.admin.inviteUserByEmail(input.email);
+      if (authError) throw authError;
+      authUserId = authUser.user.id;
+    }
+
+    // Then create the user record
+    const { data, error } = await this.supabase
+      .from('users')
+      .insert({
+        id: authUserId,
+        email: input.email,
+        name: input.name,
+        role: input.role,
+        primary_gyms: input.primary_gyms,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error in createUser:', error);
+    throw new SchedulerError('Failed to create user', ErrorCodes.DATA_UPDATE_ERROR);
+  }
+}
+
+async updateUser(input: UserUpdateInput): Promise<User> {
+  try {
+    const updateData: Partial<User> = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (input.name !== undefined) updateData.name = input.name;
+    if (input.role !== undefined) updateData.role = input.role;
+    if (input.primary_gyms !== undefined) updateData.primary_gyms = input.primary_gyms;
+
+    const { data, error } = await this.supabase
+      .from('users')
+      .update(updateData)
+      .eq('id', input.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error in updateUser:', error);
+    throw new SchedulerError('Failed to update user', ErrorCodes.DATA_UPDATE_ERROR);
+  }
+}
+
+async createGym(input: Omit<GymCreateInput, 'id'>): Promise<Gym> {
+  try {
+    // Generate a lowercase string ID from the gym name (like your other gym IDs)
+    const gymId = input.name.toLowerCase()
+      .replace(/\s+/g, '') // Remove spaces
+      .replace(/[^a-z0-9]/g, ''); // Remove special characters
+
+    const { data, error } = await this.supabase
+      .from('gyms')
+      .insert({
+        id: gymId,
+        name: input.name,
+        location: input.location,
+        paired_gym_id: input.paired_gym_id === 'none' ? null : input.paired_gym_id,
+        active: input.active,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error in createGym:', error);
+    throw new SchedulerError('Failed to create gym', ErrorCodes.DATA_UPDATE_ERROR);
+  }
+}
+
+async updateGym(id: string, input: Partial<Omit<GymCreateInput, 'id'>>): Promise<Gym> {
+  try {
+    const { data, error } = await this.supabase
+      .from('gyms')
+      .update({
+        ...input,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error in updateGym:', error);
+    throw new SchedulerError('Failed to update gym', ErrorCodes.DATA_UPDATE_ERROR);
   }
 }
 
